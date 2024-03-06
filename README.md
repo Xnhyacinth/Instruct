@@ -21,8 +21,6 @@ You can refer to the [Dockerfile](Dockerfile) for setting up the environment and
 pip install -r requirements.txt
 ```
 
-Note: after the main exploration with 3B model, we train our 11B model on TPUs using the T5 code [here](https://github.com/google-research/text-to-text-transfer-transformer).
-
 ## Data
 
 Our models are trained and evaluated on [Super-NaturalInstructions](https://github.com/allenai/natural-instructions), which can be cloned by running:
@@ -47,81 +45,4 @@ However, if you are familiar with [Beaker](https://beaker.org/), you can refer t
 
 ```bash
 python src/create_exps.py
-```
-
-## Released Checkpoints
-
-Our 3B and 11B model checkpoints are accessible via the [Hugging Face Hub](https://huggingface.co/models?search=tk-instruct-). You can load them easily using the [Transformers](https://github.com/huggingface/transformers) library:
-
-```python
->>> from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-
->>> tokenizer = AutoTokenizer.from_pretrained("allenai/tk-instruct-3b-def")
->>> model = AutoModelForSeq2SeqLM.from_pretrained("allenai/tk-instruct-3b-def")
-
->>> input_ids = tokenizer.encode(
-        "Definition: return the currency of the given country. Now complete the following example - Input: India. Output:", 
-        return_tensors="pt"
-    )
->>> output = model.generate(input_ids, max_length=10)
->>> output = tokenizer.decode(output[0], skip_special_tokens=True)
-```
-
-The model should generate `'Indian Rupee'` as the output.
-
-## Evaluation
-
-The following script evaluates our 3B Tk-Instruct model that uses `task definition + 2 positive examples` as instructions:
-
-```bash
-./scripts/eval_tk_instruct.sh
-```
-
-This should give you a ROUGE-L score of ~54.0, as is reported in the Table 3 of our [paper](https://arxiv.org/pdf/2204.07705.pdf).
-
-You can also try other models under different encodings. You can control whether to include definition / explanation, or the number of pos/neg examples, by specifying the arguments in [`src/run_s2s.py`](src/run_s2s.py).
-
-The numbers for heuristic baselines and GPT3 can be reproduced by using the following scripts:
-
-```bash
-./scripts/run_heuristics.sh
-./scripts/run_gpt3.sh
-```
-
-## Model Predictions and Performance
-
-The predictions of our tested models can be found in the [`output`](output/) folder. You can evaluate each predition file in the following way:
-
-```bash
-python src/compute_metrics.py --predictions output/default/tk-instruct-3b-def-pos/predicted_examples.jsonl --track default --compute_per_category_metrics
-python src/compute_metrics.py --predictions output/xlingual/mtk-instruct-3b-def-pos/predicted_examples.jsonl --track xlingual --compute_per_category_metrics
-```
-
-Here are the performance numbers (in ROUGE-L) for our tested models:
-
-|                          | Models                  | Default Track (en) | X-lingual Track |
-|--------------------------|-------------------------|--------------------|-----------------|
-| Heuristic Baselines      | Copying Instance Input  | 14.20              | 5.44            |
-|                          | Copying Demo. Output    | 28.54              | 50.31           |
-| Pretrained LMs           | T5-LM (11B)             | 30.16              | -               |
-|                          | GPT3 (175B)             | 45.05              | 51.20           |
-| Instruction-tuned Models | T0 (11B)                | 32.28              | -               |
-|                          | GPT3-Instruct (175B)    | 52.06              | 53.74           |
-|                          | Tk-Instruct (Ours, 3B)  | 54.33              | -               |
-|                          | Tk-Instruct (Ours, 11B) | 60.07              | -               |
-|                          | mTk-Instruct (Ours, 3B) | -                  | 56.72           |
-
-Note that these numbers might be different from the numbers reported in the our arxiv paper, because we 1) resampled our evaluation instances; 2) updated our evaluation script. We will update the paper once allowed.
-
-We will keep adding the predictions and performance of new models into this repository.
-
-## Citation
-
-```bib
-@inproceedings{supernaturalinstructions,
-  title={Super-NaturalInstructions:Generalization via Declarative Instructions on 1600+ Tasks},
-  author={Wang, Yizhong and Mishra, Swaroop and Alipoormolabashi, Pegah and Kordi, Yeganeh and Mirzaei, Amirreza and Arunkumar, Anjana and Ashok, Arjun and Dhanasekaran, Arut Selvan and Naik, Atharva and Stap, David and others},
-  booktitle={EMNLP},
-  year={2022}
-}
 ```
