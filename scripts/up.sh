@@ -1,5 +1,5 @@
 git add beaker_configs
-git add data
+git add data/*
 git add ds_configs
 git add *.py
 git add *.md
