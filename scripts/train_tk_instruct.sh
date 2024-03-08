@@ -23,9 +23,11 @@ lr=${5:-"5e-5"}
 echo "lr: ${lr}"
 e=${6:-"0"}
 tune=${7:-"full"}
+warmup_ratio=${8:-"0.00"}
+r=${9:-"16"}
 cache="./cache"
-name=experiment-${model}_lr${lr}
-output_dir=output/${model}_lr${lr}
+name=experiment-${model}_lr${lr}_warm${warmup_ratio}_r${r}
+output_dir=output/${model}_lr${lr}_warm${warmup_ratio}_r${r}
 extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 run_file=run_s2s.py
@@ -71,7 +73,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --learning_rate ${lr} \
     --num_train_epochs 3 \
     --lr_scheduler_type constant \
-    --warmup_ratio 0.00 \
+    --warmup_ratio ${warmup_ratio} \
     --logging_strategy steps \
     --logging_steps 500 \
     --save_strategy steps \
@@ -80,4 +82,5 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --bf16 \
     --run_name ${name} \
     --save_total_limit 1 \
+    --r ${r} \
     ${extra_args}

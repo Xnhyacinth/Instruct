@@ -25,6 +25,12 @@ class DenserEvalCallback(TrainerCallback):
 
 class NITrainer(Seq2SeqTrainer):
 
+    # def compute_loss(self, model, inputs, return_outputs=False):
+    #     outputs = model(inputs["x"])
+    #     target = inputs["labels"]
+    #     loss = F.nll_loss(outputs, target)
+    #     return (loss, outputs) if return_outputs else loss
+    
     # rewrite the evaluation loop, with customized call to compute_metrics
     def evaluation_loop(
         self,

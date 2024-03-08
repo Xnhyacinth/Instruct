@@ -356,8 +356,8 @@ def main():
     )
     lora_config = LoraConfig(
         r=model_args.r,
-        lora_alpha=32,
-        target_modules=["q", "v", "norm", "k", "o"],
+        lora_alpha=2 * model_args.r,
+        target_modules=["q", "v", "norm", "k", "o", "wi", "wo"],
         lora_dropout=0.05,
         bias="none",
         task_type=TaskType.SEQ_2_SEQ_LM
@@ -370,6 +370,7 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
+    print(model)
     model = get_peft_model(model, lora_config)
     trainable_params, all_param = model.get_nb_trainable_parameters()
     logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")

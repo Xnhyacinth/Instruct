@@ -145,7 +145,7 @@ class DataCollatorForNI:
                 return_tensors=self.return_tensors, 
                 truncation=True,
                 pad_to_multiple_of=self.pad_to_multiple_of)
-
+        
         if "output" in batch[0]["Instance"] and batch[0]["Instance"]["output"]:
             # Randomly select one reference if multiple are provided.
             labels = [random.choice(ex["Instance"]["output"]) for ex in batch]
