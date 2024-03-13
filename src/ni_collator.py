@@ -24,6 +24,7 @@ class DataCollatorForNI:
     add_explanation: bool = False
     tk_instruct: bool = False
     text_only: bool=False
+    kd: bool=False
     
 
     def __call__(self, batch, return_tensors=None):
@@ -31,7 +32,7 @@ class DataCollatorForNI:
         if return_tensors is None:
             return_tensors = self.return_tensors
 
-        sources = []
+        sources, prefixs, instances = [], [], []
         for instance in batch:
             if self.tk_instruct:
                 all_valid_encodings = [
@@ -134,7 +135,15 @@ class DataCollatorForNI:
                 sources.append(source)
             else:
                 sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
+            
+            if self.kd:
+                # prefix
+                prefix = task_name + definition + "".join(pos_examples) + "".join(neg_examples)
+                prefixs.append(prefix)
 
+                # instance
+                instances.append(task_input)
+            
         if self.text_only:
             model_inputs = {"inputs": sources}
         else:
@@ -170,5 +179,34 @@ class DataCollatorForNI:
         if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels") and not self.text_only:
             decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=model_inputs["labels"])
             model_inputs["decoder_input_ids"] = decoder_input_ids
-            
-        return model_inputs
+
+        if not self.kd:
+            return model_inputs
+        else:
+            if self.text_only:
+                prefix_inputs = {"inputs": prefixs}
+            else:
+                with self.tokenizer.as_target_tokenizer():
+                    prefix_inputs = self.tokenizer(
+                        prefixs,
+                        max_length=self.max_target_length,
+                        padding=self.padding,
+                        return_tensors=self.return_tensors,
+                        truncation=True,
+                        pad_to_multiple_of=self.pad_to_multiple_of
+                    )
+            if self.text_only:
+                instance_inputs = {"inputs": instances}
+            else:
+                with self.tokenizer.as_target_tokenizer():
+                    instance_inputs = self.tokenizer(
+                        instances,
+                        max_length=self.max_target_length,
+                        padding=self.padding,
+                        return_tensors=self.return_tensors,
+                        truncation=True,
+                        pad_to_multiple_of=self.pad_to_multiple_of
+                    )
+            instance_inputs["labels"] = model_inputs["labels"]
+            instance_inputs["decoder_input_ids"] = decoder_input_ids
+            return model_inputs, prefix_inputs, instance_inputs

@@ -25,7 +25,7 @@ import sys
 import json
 from dataclasses import dataclass, field
 from typing import Optional
-from peft import LoraConfig, get_peft_model, prepare_model_for_int8_training, TaskType, PeftConfig, PeftModel
+
 import datasets
 import nltk  # Here to have a nice missing dependency error message early on
 import numpy as np
@@ -50,8 +50,9 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
+from model import T5LoraWrapper
 from ni_collator import DataCollatorForNI
-from ni_trainer import NITrainer, DenserEvalCallback
+from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
 from compute_metrics import compute_metrics, compute_grouped_metrics
 
 set_progress_bar_enabled(False)
@@ -79,6 +80,9 @@ class ModelArguments:
 
     model_name_or_path: str = field(
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+    )
+    t_model: str = field(
+        metadata={"help": "Path to teacher model or model identifier from huggingface.co/models"}
     )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
@@ -118,7 +122,24 @@ class ModelArguments:
             "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
         },
         )
-    
+    temperature: Optional[float] = field(
+        default=1.0,
+        metadata={
+            "help": "The temperature."
+        },
+        )
+    load_hypernet_weights: str = field(
+        default=None,
+        metadata={"help": "Path to hypernet weights, otherwise random init."},
+    )
+    name: str = field(
+        default=None,
+        metadata={"help": "Path to hypernet weights, otherwise random init."},
+    )
+    alpha_kd: Optional[float] = field(
+        default=0.4,
+        metadata={"help": "weights of KD loss."}
+    )
 
 
 @dataclass
@@ -238,10 +259,6 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."} 
     )
-    alpha_kd: Optional[int] = field(
-        default=0.4,
-        metadata={"help": "weights of KD loss."}
-    )
     
     def __post_init__(self):
         pass
@@ -292,7 +309,6 @@ def main():
     transformers.utils.logging.set_verbosity(log_level)
     transformers.utils.logging.enable_default_handler()
     transformers.utils.logging.enable_explicit_format()
-
     # Log on each process the small summary:
     logger.warning(
         f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
@@ -329,7 +345,7 @@ def main():
 
     # Set seed before initializing model.
     set_seed(training_args.seed)
-
+    
     # Get the NaturalInstructions dataset
     raw_datasets = load_dataset(
         "src/ni_dataset.py", 
@@ -339,7 +355,7 @@ def main():
         max_num_instances_per_task=data_args.max_num_instances_per_task,
         max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
     )
-
+   
     # Load pretrained model and tokenizer
     #
     # Distributed training:
@@ -358,14 +374,6 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    lora_config = LoraConfig(
-        r=model_args.r,
-        lora_alpha=2 * model_args.r,
-        target_modules=["q", "v", "norm", "k", "o", "wi", "wo", "emb"],
-        lora_dropout=0.05,
-        bias="none",
-        task_type=TaskType.SEQ_2_SEQ_LM
-    )
     model = AutoModelForSeq2SeqLM.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -374,10 +382,14 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    model = get_peft_model(model, lora_config)
-    trainable_params, all_param = model.get_nb_trainable_parameters()
+    
+    def get_parameter_number(model):
+        total_num = sum(p.numel() for p in model.parameters())
+        trainable_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        return total_num, trainable_num
+    
+    trainable_params, all_param = get_parameter_number(model)
     logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
-    model.print_trainable_parameters()
     model.resize_token_embeddings(len(tokenizer))
 
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
@@ -466,7 +478,8 @@ def main():
         num_pos_examples=data_args.num_pos_examples,
         num_neg_examples=data_args.num_neg_examples,
         add_explanation=data_args.add_explanation,
-        tk_instruct=data_args.tk_instruct
+        tk_instruct=data_args.tk_instruct,
+        kd=True
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
     # and some of the information will aslo be used in evaluation.
@@ -496,9 +509,24 @@ def main():
                         "Prediction": pred
                     }) + "\n")
         return result
-
+    
+    t_model = AutoModelForSeq2SeqLM.from_pretrained(
+        model_args.t_model,
+        device_map='auto',
+        from_tf=bool(".ckpt" in model_args.t_model),
+        config=config,
+        # cache_dir=model_args.cache_dir,
+        revision=model_args.model_revision,
+        use_auth_token=True if model_args.use_auth_token else None,
+    )
+    for layer in t_model.modules():
+        for _, param in layer.named_parameters():
+            param.requires_grad = False
+    
+    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
+    
     # Initialize our Trainer
-    trainer = NITrainer(
+    trainer = NIKDTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
@@ -508,7 +536,7 @@ def main():
         compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
         callbacks=[DenserEvalCallback] if training_args.denser_evaluation else None
     )
-
+    trainer.post_init(model_args, t_model)
     all_metrics = {"run_name": training_args.run_name}
 
     # Training

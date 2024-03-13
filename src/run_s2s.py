@@ -231,6 +231,10 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."} 
     )
+    alpha_kd: Optional[int] = field(
+        default=0.4,
+        metadata={"help": "weights of KD loss."}
+    )
     
     def __post_init__(self):
         pass
@@ -327,7 +331,7 @@ def main():
         max_num_instances_per_task=data_args.max_num_instances_per_task,
         max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
     )
-
+   
     # Load pretrained model and tokenizer
     #
     # Distributed training:
@@ -480,7 +484,7 @@ def main():
                         "Prediction": pred
                     }) + "\n")
         return result
-
+    
     # Initialize our Trainer
     trainer = NITrainer(
         model=model,

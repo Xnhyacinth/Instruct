@@ -30,7 +30,7 @@ name=experiment-${model}_lr${lr}_warm${warmup_ratio}
 output_dir=output/${model}_lr${lr}_warm${warmup_ratio}
 extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
-run_file=run_s2s.py
+run_file=run_s2s_kd.py
 if [ "$e" == "eval" ];then
     cache="./cache_eval"
     name="${name}-eval"
@@ -39,17 +39,13 @@ if [ "$e" == "eval" ];then
     extra_args="--evaluation_strategy steps --do_eval --eval_steps 2500"
     echo name: ${name}
 fi
-if [ "$tune" != "full" ];then
-    name="${name}-${tune}_r${r}"
-    output_dir="${output_dir}_${tune}_r${r}"
-    run_file=run_s2s_${tune}.py
+if [ "$tune" == "lora" ];then
+    name="${name}-lora_r${r}"
+    output_dir="${output_dir}_lora_r${r}"
+    run_file=run_s2s_lora.py
     extra_args="${extra_args} --r ${r}"
     echo name: ${name}
 fi
-if [ "$tune" == "kd" ];then
-    extra_args="${extra_args} --t_model output/t5-base_lr5e-5 --name hyperlora --temperature 3.0"
-fi
-echo run_file: ${run_file}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --do_train \
     --do_predict \
