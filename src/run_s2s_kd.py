@@ -382,6 +382,7 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
+    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
@@ -510,21 +511,6 @@ def main():
                     }) + "\n")
         return result
     
-    t_model = AutoModelForSeq2SeqLM.from_pretrained(
-        model_args.t_model,
-        device_map='auto',
-        from_tf=bool(".ckpt" in model_args.t_model),
-        config=config,
-        # cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
-    for layer in t_model.modules():
-        for _, param in layer.named_parameters():
-            param.requires_grad = False
-    
-    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
-    
     # Initialize our Trainer
     trainer = NIKDTrainer(
         model=model,
@@ -536,7 +522,8 @@ def main():
         compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
         callbacks=[DenserEvalCallback] if training_args.denser_evaluation else None
     )
-    trainer.post_init(model_args, t_model)
+    trainer.post_init(model_args)
+    # trainer.post_init(model_args, t_model)
     all_metrics = {"run_name": training_args.run_name}
 
     # Training

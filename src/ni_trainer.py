@@ -5,6 +5,11 @@ from transformers.trainer import *
 from datasets import load_metric
 from transformers.trainer_callback import TrainerCallback
 import torch.nn.functional as F
+from transformers import (
+    AutoConfig,
+    AutoModelForSeq2SeqLM,
+)
+from model import T5LoraWrapper
 
 
 class DenserEvalCallback(TrainerCallback):
@@ -28,8 +33,18 @@ class NIKDTrainer(Seq2SeqTrainer):
     
     def post_init(self, args, t_model):
         self.config = args
-        self.t_model = t_model
-    
+        self.t_model = AutoModelForSeq2SeqLM.from_pretrained(
+            args.t_model,
+            from_tf=bool(".ckpt" in args.t_model),
+            # cache_dir=model_args.cache_dir,
+            revision=args.model_revision,
+            use_auth_token=True if args.use_auth_token else None,
+        )
+        for layer in t_model.modules():
+            for _, param in layer.named_parameters():
+                param.requires_grad = False
+        
+        
     # kd loss
     def cal_loss(self, s_logits, t_logits, temperature):
         soft_labels = F.log_softmax(
