@@ -1,6 +1,7 @@
 import logging
 import random
 import string
+import torch
 from transformers.data.data_collator import *
 
 logger = logging.getLogger(__name__)
@@ -139,7 +140,7 @@ class DataCollatorForNI:
             if self.kd:
                 # prefix
                 prefix = task_name + definition + "".join(pos_examples) + "".join(neg_examples)
-                prefixs.append(prefix)
+                prefixs.append(instance["features"])
 
                 # instance
                 instances.append(task_input)
@@ -183,18 +184,18 @@ class DataCollatorForNI:
         if not self.kd:
             return model_inputs
         else:
-            if self.text_only:
-                prefix_inputs = {"inputs": prefixs}
-            else:
-                with self.tokenizer.as_target_tokenizer():
-                    prefix_inputs = self.tokenizer(
-                        prefixs,
-                        max_length=self.max_target_length,
-                        padding=self.padding,
-                        return_tensors=self.return_tensors,
-                        truncation=True,
-                        pad_to_multiple_of=self.pad_to_multiple_of
-                    )
+            # if self.text_only:
+            #     prefix_inputs = {"inputs": prefixs}
+            # else:
+            #     with self.tokenizer.as_target_tokenizer():
+            #         prefix_inputs = self.tokenizer(
+            #             prefixs,
+            #             max_length=self.max_target_length,
+            #             padding=self.padding,
+            #             return_tensors=self.return_tensors,
+            #             truncation=True,
+            #             pad_to_multiple_of=self.pad_to_multiple_of
+            #         )
             if self.text_only:
                 instance_inputs = {"inputs": instances}
             else:
@@ -208,5 +209,7 @@ class DataCollatorForNI:
                         pad_to_multiple_of=self.pad_to_multiple_of
                     )
             instance_inputs["labels"] = model_inputs["labels"]
-            instance_inputs["decoder_input_ids"] = decoder_input_ids
-            return model_inputs, prefix_inputs, instance_inputs
+            instance_inputs["features"] = torch.Tensor(prefixs)
+            if "decoder_input_ids" in model_inputs.keys():
+                instance_inputs["decoder_input_ids"] = decoder_input_ids
+            return model_inputs, instance_inputs

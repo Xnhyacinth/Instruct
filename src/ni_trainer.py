@@ -11,7 +11,6 @@ from transformers import (
 )
 from model import T5LoraWrapper
 
-
 class DenserEvalCallback(TrainerCallback):
 
     def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
@@ -31,18 +30,19 @@ class DenserEvalCallback(TrainerCallback):
 
 class NIKDTrainer(Seq2SeqTrainer):
     
-    def post_init(self, args):
+    def post_init(self, args, t_model):
         self.config = args
-        self.t_model = AutoModelForSeq2SeqLM.from_pretrained(
-            args.t_model,
-            from_tf=bool(".ckpt" in args.t_model),
-            # cache_dir=model_args.cache_dir,
-            revision=args.model_revision,
-            use_auth_token=True if args.use_auth_token else None,
-        )
-        for layer in self.t_model.modules():
-            for _, param in layer.named_parameters():
-                param.requires_grad = False
+        self.t_model = t_model.cuda()
+        # self.t_model = AutoModelForSeq2SeqLM.from_pretrained(
+        #     args.t_model,
+        #     from_tf=bool(".ckpt" in args.t_model),
+        #     # cache_dir=model_args.cache_dir,
+        #     revision=args.model_revision,
+        #     use_auth_token=True if args.use_auth_token else None,
+        # )
+        # for layer in self.t_model.modules():
+        #     for _, param in layer.named_parameters():
+        #         param.requires_grad = False
         
         
     # kd loss
@@ -77,6 +77,15 @@ class NIKDTrainer(Seq2SeqTrainer):
             vecs = (vecs + bias).dot(kernel)
         return vecs / (vecs**2).sum(axis=1, keepdims=True)**0.5
     
+    def preprocess_function(self, sample):
+        output = self.t_model.encoder(**sample, return_dict=True)
+        pooled_sentence = output.last_hidden_state # shape is [batch_size, seq_len, hidden_size]
+        pooled_sentence = np.array(torch.mean(pooled_sentence, dim=1).cpu().detach().numpy())
+        kernel, bias = self.compute_kernel_bias(pooled_sentence, 255)
+        pooled_sentence = self.transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
+        sample['features'] = pooled_sentence
+        return sample
+    
     def get_features(self, inputs):
         output = self.t_model.encoder(**inputs, return_dict=True)
         pooled_sentence = output.last_hidden_state # shape is [batch_size, seq_len, hidden_size]
@@ -94,10 +103,10 @@ class NIKDTrainer(Seq2SeqTrainer):
         t_loss = t_outputs.get("loss")
         t_logits = t_outputs.get("logits")
         
-        prefix_encodings = self.get_features(inputs[1])
-        inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
+        # prefix_encodings = self.get_features(inputs[1])
+        # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
         
-        outputs = model(**inputs[2], return_dict=True)
+        outputs = model(**inputs[1], return_dict=True)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
         loss = (
@@ -192,10 +201,9 @@ class NIKDTrainer(Seq2SeqTrainer):
                 # For batch samplers, batch_size is not known by the dataloader in advance.
                 if batch_size is None:
                     batch_size = observed_batch_size
-            prefix_encodings = self.get_features(inputs[1])
-            inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
+
             # Prediction step
-            loss, logits, labels = self.prediction_step(model, inputs[2], prediction_loss_only, ignore_keys=ignore_keys)
+            loss, logits, labels = self.prediction_step(model, inputs[1], prediction_loss_only, ignore_keys=ignore_keys)
 
             if is_torch_tpu_available():
                 xm.mark_step()
