@@ -142,6 +142,30 @@ class ModelArguments:
         default=0.4,
         metadata={"help": "weights of KD loss."}
     )
+    use_kl: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use kl loss."
+        },
+    )
+    use_hd: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use hidden states loss."
+        },
+    )
+    use_attn: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use attention loss."
+        },
+    )
+    select: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to select layers for hd & attn loss."
+        },
+    )
 
 
 @dataclass
@@ -567,7 +591,9 @@ def main():
         pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
         sample['features'] = pooled_sentence
         return sample
-    raw_datasets['train'] = raw_datasets["train"].select(range(5000))
+    print(raw_datasets)
+    raw_datasets['train'] = raw_datasets["train"].select(range(1000))
+    raw_datasets['test'] = raw_datasets["test"].select(range(100))
     with training_args.main_process_first(desc="dataset map pre-processing"):
         raw_datasets = raw_datasets.map(
             preprocess_function,

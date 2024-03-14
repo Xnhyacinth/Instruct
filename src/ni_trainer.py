@@ -9,6 +9,7 @@ from transformers import (
     AutoConfig,
     AutoModelForSeq2SeqLM,
 )
+from losses import att_mse_loss, cos_loss
 from model import T5LoraWrapper
 
 class DenserEvalCallback(TrainerCallback):
@@ -32,7 +33,7 @@ class NIKDTrainer(Seq2SeqTrainer):
     
     def post_init(self, args, t_model):
         self.config = args
-        self.t_model = t_model.cuda()
+        self.t_model = t_model
         # self.t_model = AutoModelForSeq2SeqLM.from_pretrained(
         #     args.t_model,
         #     from_tf=bool(".ckpt" in args.t_model),
@@ -43,7 +44,6 @@ class NIKDTrainer(Seq2SeqTrainer):
         # for layer in self.t_model.modules():
         #     for _, param in layer.named_parameters():
         #         param.requires_grad = False
-        
         
     # kd loss
     def cal_loss(self, s_logits, t_logits, temperature):
@@ -94,25 +94,71 @@ class NIKDTrainer(Seq2SeqTrainer):
         pooled_sentence = self.transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
         return pooled_sentence
     
+    def cal_kl(self, logits, t_logits):
+        p_s = F.log_softmax(logits / 4.0, dim=-1)
+        p_t = F.softmax(t_logits / 4.0, dim=-1)
+        kl_loss = (
+            F.kl_div(p_s, p_t, reduction='batchmean')
+        )
+        return torch.sigmoid(kl_loss) * kl_loss
+    
+    def cal_hd(self, hd, t_hd, context_mask):
+        if self.config.select:
+            hd = [hd[0], hd[len(hd) // 2], hd[-1]]
+            t_hd = [t_hd[0], t_hd[len(t_hd) // 2], t_hd[-1]]
+
+        loss_h = [cos_loss(
+                h,
+                t_h,
+                context_mask.view(context_mask.size(0) * context_mask.size(1), -1),
+            )
+            for h, t_h in zip(hd, t_hd)
+        ]
+        print(sum(loss_h) / len(loss_h))
+        return sum(loss_h) / len(loss_h)
+    
+    def cal_attn(self, attn, t_attn, context_mask):
+        if self.config.select:
+            attn = [attn[0], attn[len(attn) // 2], attn[-1]]
+            t_attn = [t_attn[0], t_attn[len(t_attn) // 2], t_attn[-1]]
+
+        loss_a = [
+            att_mse_loss(a.repeat(1, t_a.size(0) // a.size(0), 1, 1).view(-1, a.size(1), a.size(2), a.size(3)),
+                            t_a, context_mask.view(context_mask.size(0) * context_mask.size(1), -1).repeat(t_a.size(0) // a.size(0), 1))
+            for a, t_a in zip(attn, t_attn)
+        ]
+        print(sum(loss_a) / len(loss_a))
+        return sum(loss_a) / len(loss_a)
+    
     def compute_loss(self, model, inputs, return_outputs=False):
         # forward pass
         self.t_model.eval()
         model.train()
         with torch.no_grad():
-            t_outputs = self.t_model(**inputs[0], return_dict=True)
+            t_outputs = self.t_model(**inputs[0], return_dict=True, output_attentions=True, output_hidden_states=True)
         t_loss = t_outputs.get("loss")
         t_logits = t_outputs.get("logits")
         
         # prefix_encodings = self.get_features(inputs[1])
         # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
         
-        outputs = model(**inputs[1], return_dict=True)
+        outputs = model(**inputs[1], return_dict=True, output_attentions=True, output_hidden_states=True)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
         loss = (
                 self.config.alpha_kd * self.cal_loss(logits, t_logits, self.config.temperature)
                 + (1 - self.config.alpha_kd) * loss
             )
+        
+        if self.config.use_kl:
+            loss += self.cal_kl(logits, t_logits) / 10
+        if self.config.use_hd:
+            loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"), inputs[1]["attention_mask"])
+            loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states"), inputs[1]["attention_mask"])
+        if self.config.use_attn:
+            loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions"), inputs[1]["attention_mask"])
+            loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions"), inputs[1]["attention_mask"])
+
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()
         # loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
@@ -345,13 +391,14 @@ class NIKDTrainer(Seq2SeqTrainer):
         # prepare generation inputs
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
-        if hasattr(self.model, "encoder") and self.model.encoder.main_input_name != self.model.main_input_name:
-            generation_inputs = inputs[self.model.encoder.main_input_name]
+
+        if hasattr(self.model.model, "encoder") and self.model.model.encoder.main_input_name != self.model.model.main_input_name:
+            generation_inputs = inputs[self.model.model.encoder.main_input_name]
         else:
-            generation_inputs = inputs[self.model.main_input_name]
+            generation_inputs = inputs[self.model.model.main_input_name]
 
         generated_tokens = self.model.generate(
-            **{'input_ids':generation_inputs},
+            **{'input_ids':generation_inputs, 'features':inputs['features']},
             **gen_kwargs,
         )
         # in case the batch is shorter than max length, the output should be padded
@@ -624,6 +671,7 @@ class NITrainer(Seq2SeqTrainer):
         # prepare generation inputs
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
+        
         if hasattr(self.model, "encoder") and self.model.encoder.main_input_name != self.model.main_input_name:
             generation_inputs = inputs[self.model.encoder.main_input_name]
         else:

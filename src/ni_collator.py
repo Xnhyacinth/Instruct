@@ -202,7 +202,7 @@ class DataCollatorForNI:
                 with self.tokenizer.as_target_tokenizer():
                     instance_inputs = self.tokenizer(
                         instances,
-                        max_length=self.max_target_length,
+                        max_length=self.max_source_length,
                         padding=self.padding,
                         return_tensors=self.return_tensors,
                         truncation=True,
