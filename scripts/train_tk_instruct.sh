@@ -25,6 +25,7 @@ e=${6:-"0"}
 tune=${7:-"full"}
 warmup_ratio=${8:-"0.00"}
 r=${9:-"16"}
+allenai=${10:-"0"}
 cache="./cache"
 name=experiment-${model}_lr${lr}_warm${warmup_ratio}
 output_dir=output/${model}_lr${lr}_warm${warmup_ratio}
@@ -47,7 +48,13 @@ if [ "$tune" != "full" ];then
     echo name: ${name}
 fi
 if [ "$tune" == "kd" ];then
-    extra_args="${extra_args} --t_model output/${model}_lr5e-5 --name hyperlora_kd --temperature 3.0 --use_kl True"
+    t_model=output/${model}_lr5e-5
+    if [ "$allenai" == "allenai" ];then
+        t_model=allenai/tk-instruct-3b-def-pos
+        name="${name}_allenai"
+        output_dir="${output_dir}_allenai"
+    fi
+    extra_args="${extra_args} --t_model ${t_model} --name hyperlora_kd --temperature 3.0 --use_kl True"
 fi
 echo run_file: ${run_file}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
