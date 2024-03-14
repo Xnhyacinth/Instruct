@@ -47,7 +47,7 @@ if [ "$tune" != "full" ];then
     echo name: ${name}
 fi
 if [ "$tune" == "kd" ];then
-    extra_args="${extra_args} --t_model output/t5-base_lr5e-5 --name hyperlora_kd --temperature 3.0 --use_kl True"
+    extra_args="${extra_args} --t_model output/${model}_lr5e-5 --name hyperlora_kd --temperature 3.0 --use_kl True"
 fi
 echo run_file: ${run_file}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
