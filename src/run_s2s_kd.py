@@ -591,9 +591,7 @@ def main():
         pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
         sample['features'] = pooled_sentence
         return sample
-    print(raw_datasets)
-    # raw_datasets['train'] = raw_datasets["train"].select(range(1000))
-    # raw_datasets['test'] = raw_datasets["test"].select(range(100))
+
     with training_args.main_process_first(desc="dataset map pre-processing"):
         raw_datasets = raw_datasets.map(
             preprocess_function,
