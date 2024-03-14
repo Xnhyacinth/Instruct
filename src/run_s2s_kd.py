@@ -382,7 +382,6 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
@@ -392,6 +391,7 @@ def main():
     trainable_params, all_param = get_parameter_number(model)
     logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     model.resize_token_embeddings(len(tokenizer))
+    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
 
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
