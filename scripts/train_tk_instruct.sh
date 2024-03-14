@@ -26,6 +26,7 @@ tune=${7:-"full"}
 warmup_ratio=${8:-"0.00"}
 r=${9:-"16"}
 allenai=${10:-"0"}
+use_kl=${11:-"False"}
 cache="./cache"
 name=experiment-${model}_lr${lr}_warm${warmup_ratio}
 output_dir=output/${model}_lr${lr}_warm${warmup_ratio}
@@ -45,7 +46,6 @@ if [ "$tune" != "full" ];then
     output_dir="${output_dir}_${tune}_r${r}"
     run_file=run_s2s_${tune}.py
     extra_args="${extra_args} --r ${r}"
-    echo name: ${name}
 fi
 if [ "$tune" == "kd" ];then
     t_model=output/${model}_lr5e-5
@@ -54,8 +54,14 @@ if [ "$tune" == "kd" ];then
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
     fi
-    extra_args="${extra_args} --t_model ${t_model} --name hyperlora_kd --temperature 3.0 --use_kl True"
+    if [ "$use_kl" == "kl" ];then
+        name="${name}_kl"
+        output_dir="${output_dir}_kl"
+        use_kl=True
+    fi
+    extra_args="${extra_args} --t_model ${t_model} --name hyperlora_kd --temperature 3.0 --use_kl ${use_kl}"
 fi
+echo name: ${name}
 echo run_file: ${run_file}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --do_train \
