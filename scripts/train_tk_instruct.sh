@@ -89,7 +89,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --per_device_eval_batch_size ${bs} \
     --gradient_accumulation_steps 2 \
     --learning_rate ${lr} \
-    --num_train_epochs 5 \
+    --num_train_epochs 3 \
     --lr_scheduler_type constant \
     --warmup_ratio ${warmup_ratio} \
     --logging_strategy steps \

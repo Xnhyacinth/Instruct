@@ -24,8 +24,9 @@ class DataCollatorForNI:
     num_neg_examples: int = 0
     add_explanation: bool = False
     tk_instruct: bool = False
-    text_only: bool=False
-    kd: bool=False
+    text_only: bool = False
+    kd: bool = False
+    task_features: dict = None
     
 
     def __call__(self, batch, return_tensors=None):
@@ -33,118 +34,116 @@ class DataCollatorForNI:
         if return_tensors is None:
             return_tensors = self.return_tensors
 
-        sources, prefixs, instances = [], [], []
-        for instance in batch:
-            if self.tk_instruct:
-                all_valid_encodings = [
-                    # instruction only
-                    {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 0, "num_neg_examples": 0, "add_explanation": False}, 
-                    # example only
-                    {"add_task_name": False, "add_task_definition": False, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False}, 
-                    # instruction + pos examples
-                    {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False}, 
-                    # instruction + pos examples + neg examples 
-                    {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 2, "add_explanation": False},
-                    # instruction + pos (w. explanation) 
-                    {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": True}, 
-                ]
-                encoding_schema = random.choice(all_valid_encodings)
-                add_task_name = encoding_schema["add_task_name"]
-                add_task_definition = encoding_schema["add_task_definition"]
-                num_pos_examples = encoding_schema["num_pos_examples"]
-                num_neg_examples = encoding_schema["num_neg_examples"]
-                add_explanation = encoding_schema["add_explanation"]
-            else:
-                add_task_name = self.add_task_name
-                add_task_definition = self.add_task_definition
-                num_pos_examples = self.num_pos_examples
-                num_neg_examples = self.num_neg_examples
-                add_explanation = self.add_explanation 
-
-            task_input = ""
-            # add the input first.
-            task_input += "Now complete the following example -\n"
-            task_input += f"Input: {instance['Instance']['input'].strip()}"
-            if not task_input[-1] in string.punctuation:
-                task_input += "."
-            task_input += "\n"
-            task_input += "Output: "
-            
-            task_name = ""
-            if add_task_name:
-                task_name += instance["Task"] + ". "
-
-            definition = ""
-            if add_task_definition:
-                if isinstance(instance["Definition"], list):
-                    definition = "Definition: " + instance["Definition"][0].strip() # TODO: should we use <Definition>?
+        if not self.kd:
+            sources = []
+            for instance in batch:
+                if self.tk_instruct:
+                    all_valid_encodings = [
+                        # instruction only
+                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 0, "num_neg_examples": 0, "add_explanation": False}, 
+                        # example only
+                        {"add_task_name": False, "add_task_definition": False, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False}, 
+                        # instruction + pos examples
+                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False}, 
+                        # instruction + pos examples + neg examples 
+                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 2, "add_explanation": False},
+                        # instruction + pos (w. explanation) 
+                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": True}, 
+                    ]
+                    encoding_schema = random.choice(all_valid_encodings)
+                    add_task_name = encoding_schema["add_task_name"]
+                    add_task_definition = encoding_schema["add_task_definition"]
+                    num_pos_examples = encoding_schema["num_pos_examples"]
+                    num_neg_examples = encoding_schema["num_neg_examples"]
+                    add_explanation = encoding_schema["add_explanation"]
                 else:
-                    definition = "Definition: " + instance["Definition"].strip()
-                if not definition[-1] in string.punctuation:
-                    definition += "."
-                definition += "\n\n"
-            
-            # try to add positive examples.
-            pos_examples = []
-            for idx, pos_example in enumerate(instance["Positive Examples"][:num_pos_examples]):
-                pos_example_str = f" Positive Example {idx+1} -\n"
-                pos_example_str += f"Input: {pos_example['input'].strip()}"
-                if not pos_example_str[-1] in string.punctuation:
-                    pos_example_str += "."
-                pos_example_str += "\n"
-                pos_example_str += f" Output: {pos_example['output'].strip()}"
-                if not pos_example_str[-1] in string.punctuation:
-                    pos_example_str += "."
-                pos_example_str += "\n" 
-                if add_explanation and "explanation" in pos_example:
-                    pos_example_str += f" Explanation: {pos_example['explanation'].strip()}"
+                    add_task_name = self.add_task_name
+                    add_task_definition = self.add_task_definition
+                    num_pos_examples = self.num_pos_examples
+                    num_neg_examples = self.num_neg_examples
+                    add_explanation = self.add_explanation 
+
+                task_input = ""
+                # add the input first.
+                task_input += "Now complete the following example -\n"
+                task_input += f"Input: {instance['Instance']['input'].strip()}"
+                if not task_input[-1] in string.punctuation:
+                    task_input += "."
+                task_input += "\n"
+                task_input += "Output: "
+                
+                task_name = ""
+                if add_task_name:
+                    task_name += instance["Task"] + ". "
+
+                definition = ""
+                if add_task_definition:
+                    if isinstance(instance["Definition"], list):
+                        definition = "Definition: " + instance["Definition"][0].strip() # TODO: should we use <Definition>?
+                    else:
+                        definition = "Definition: " + instance["Definition"].strip()
+                    if not definition[-1] in string.punctuation:
+                        definition += "."
+                    definition += "\n\n"
+                
+                # try to add positive examples.
+                pos_examples = []
+                for idx, pos_example in enumerate(instance["Positive Examples"][:num_pos_examples]):
+                    pos_example_str = f" Positive Example {idx+1} -\n"
+                    pos_example_str += f"Input: {pos_example['input'].strip()}"
                     if not pos_example_str[-1] in string.punctuation:
                         pos_example_str += "."
                     pos_example_str += "\n"
-                pos_example_str += "\n"
-                if len(self.tokenizer(definition + " ".join(pos_examples) + pos_example_str + task_input)["input_ids"]) <= self.max_source_length:
-                    pos_examples.append(pos_example_str)
-                else:
-                    break
-            
-            # try to add negative examples.
-            neg_examples = []
-            for idx, neg_example in enumerate(instance["Negative Examples"][:num_neg_examples]):
-                neg_example_str = f" Negative Example {idx+1} -\n"
-                neg_example_str += f"Input: {neg_example['input'].strip()}"
-                if not neg_example_str[-1] in string.punctuation:
-                    neg_example_str += "."
-                neg_example_str += "\n"
-                neg_example_str += f" Output: {neg_example['output'].strip()}"
-                if not neg_example_str[-1] in string.punctuation:
-                    neg_example_str += "."
-                neg_example_str += "\n"
-                if add_explanation and "explanation" in neg_example:
-                    neg_example_str += f" Explanation: {neg_example['explanation'].strip()}"
+                    pos_example_str += f" Output: {pos_example['output'].strip()}"
+                    if not pos_example_str[-1] in string.punctuation:
+                        pos_example_str += "."
+                    pos_example_str += "\n" 
+                    if add_explanation and "explanation" in pos_example:
+                        pos_example_str += f" Explanation: {pos_example['explanation'].strip()}"
+                        if not pos_example_str[-1] in string.punctuation:
+                            pos_example_str += "."
+                        pos_example_str += "\n"
+                    pos_example_str += "\n"
+                    if len(self.tokenizer(definition + " ".join(pos_examples) + pos_example_str + task_input)["input_ids"]) <= self.max_source_length:
+                        pos_examples.append(pos_example_str)
+                    else:
+                        break
+                
+                # try to add negative examples.
+                neg_examples = []
+                for idx, neg_example in enumerate(instance["Negative Examples"][:num_neg_examples]):
+                    neg_example_str = f" Negative Example {idx+1} -\n"
+                    neg_example_str += f"Input: {neg_example['input'].strip()}"
                     if not neg_example_str[-1] in string.punctuation:
                         neg_example_str += "."
                     neg_example_str += "\n"
-                neg_example_str += "\n"
-                if len(self.tokenizer(definition + " ".join(pos_examples) + " ".join(neg_examples) + neg_example_str + task_input)["input_ids"]) <= self.max_source_length:
-                    neg_examples.append(neg_example_str)
+                    neg_example_str += f" Output: {neg_example['output'].strip()}"
+                    if not neg_example_str[-1] in string.punctuation:
+                        neg_example_str += "."
+                    neg_example_str += "\n"
+                    if add_explanation and "explanation" in neg_example:
+                        neg_example_str += f" Explanation: {neg_example['explanation'].strip()}"
+                        if not neg_example_str[-1] in string.punctuation:
+                            neg_example_str += "."
+                        neg_example_str += "\n"
+                    neg_example_str += "\n"
+                    if len(self.tokenizer(definition + " ".join(pos_examples) + " ".join(neg_examples) + neg_example_str + task_input)["input_ids"]) <= self.max_source_length:
+                        neg_examples.append(neg_example_str)
+                    else:
+                        break 
+                
+                source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
+                tokenized_source = self.tokenizer(source)["input_ids"]
+                if len(tokenized_source) <= self.max_source_length:
+                    sources.append(source)
                 else:
-                    break 
-            
-            source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
-            tokenized_source = self.tokenizer(source)["input_ids"]
-            if len(tokenized_source) <= self.max_source_length:
-                sources.append(source)
-            else:
-                sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
-            
-            if self.kd:
-                # prefix
-                prefix = task_name + definition + "".join(pos_examples) + "".join(neg_examples)
-                prefixs.append(instance["features"])
-
-                # instance
-                instances.append(task_input)
-            
+                    sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
+        else:
+            sources, prefixs, instances = [], [], []
+            for instance in batch:
+                sources.append(instance["source"])
+                instances.append(instance["instance"])
+                prefixs.append(self.task_features[instance['Task']])
         if self.text_only:
             model_inputs = {"inputs": sources}
         else:
@@ -180,22 +179,9 @@ class DataCollatorForNI:
         if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels") and not self.text_only:
             decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=model_inputs["labels"])
             model_inputs["decoder_input_ids"] = decoder_input_ids
-
         if not self.kd:
             return model_inputs
         else:
-            # if self.text_only:
-            #     prefix_inputs = {"inputs": prefixs}
-            # else:
-            #     with self.tokenizer.as_target_tokenizer():
-            #         prefix_inputs = self.tokenizer(
-            #             prefixs,
-            #             max_length=self.max_target_length,
-            #             padding=self.padding,
-            #             return_tensors=self.return_tensors,
-            #             truncation=True,
-            #             pad_to_multiple_of=self.pad_to_multiple_of
-            #         )
             if self.text_only:
                 instance_inputs = {"inputs": instances}
             else:

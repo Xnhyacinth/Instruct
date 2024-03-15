@@ -134,15 +134,21 @@ class NIKDTrainer(Seq2SeqTrainer):
         # forward pass
         self.t_model.eval()
         model.train()
+        output_hidden_states = False
+        output_attentions = False
+        if self.config.use_hd:
+            output_hidden_states = True
+        if self.config.use_attn:
+            output_attentions = True
         with torch.no_grad():
-            t_outputs = self.t_model(**inputs[0], return_dict=True, output_attentions=True, output_hidden_states=True)
+            t_outputs = self.t_model(**inputs[0], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         t_loss = t_outputs.get("loss")
         t_logits = t_outputs.get("logits")
         
         # prefix_encodings = self.get_features(inputs[1])
         # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
         
-        outputs = model(**inputs[1], return_dict=True, output_attentions=True, output_hidden_states=True)
+        outputs = model(**inputs[1], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
         loss = (

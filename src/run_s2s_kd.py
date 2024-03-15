@@ -21,6 +21,7 @@ Fine-tuning the library models for sequence to sequence.
 import logging
 import os
 from pathlib import Path
+import random
 import string
 import sys
 import json
@@ -285,6 +286,9 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."} 
     )
+    pooling: Optional[str] = field(
+        default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
+    )
     
     def __post_init__(self):
         pass
@@ -371,7 +375,6 @@ def main():
 
     # Set seed before initializing model.
     set_seed(training_args.seed)
-    accelerator = Accelerator()
     # Get the NaturalInstructions dataset
     raw_datasets = load_dataset(
         "src/ni_dataset.py", 
@@ -492,8 +495,7 @@ def main():
         return vecs / (vecs**2).sum(axis=1, keepdims=True)**0.5
     
     def preprocess_function(sample):
-        padding ="max_length" if data_args.pad_to_max_length else "longest"
-        prefixs = []
+        sources, prefixs, instances = [], [], []
         for instance, task, defi, pos, neg in zip(sample['Instance'], sample['Task'], sample['Definition'], sample['Positive Examples'], sample['Negative Examples']):
             add_task_name = data_args.add_task_name
             add_task_definition = data_args.add_task_definition
@@ -570,37 +572,74 @@ def main():
                 else:
                     break 
             
+            source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
+            tokenized_source = tokenizer(source)["input_ids"]
+            if len(tokenized_source) <= data_args.max_source_length:
+                sources.append(source)
+            else:
+                sources.append(tokenizer.decode(tokenized_source[:data_args.max_source_length], skip_special_tokens=True))
+            
             # prefix
             prefix = task_name + definition + "".join(pos_examples) + "".join(neg_examples)
             prefixs.append(prefix)
-
-        with tokenizer.as_target_tokenizer():
-            prefix_inputs = tokenizer(
-                prefixs,
-                max_length=data_args.max_target_length,
-                padding=padding,
-                return_tensors="pt",
-                truncation=True,
-                pad_to_multiple_of=8 if training_args.fp16 else None
-            )
-        prefix_inputs = prefix_inputs.to(t_model.device)
-        output = t_model.encoder(**prefix_inputs, return_dict=True)
-        pooled_sentence = output.last_hidden_state # shape is [batch_size, seq_len, hidden_size]
-        pooled_sentence = np.array(torch.mean(pooled_sentence, dim=1).cpu().detach().numpy())
-        kernel, bias = compute_kernel_bias(pooled_sentence, 255)
-        pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
-        sample['features'] = pooled_sentence
+            if task not in prefixs_tasks.keys():
+                prefixs_tasks[task] = prefix
+            
+            # instance
+            instances.append(task_input)
+        sample['source'] = sources
+        sample['instance'] = instances
         return sample
+    
+    def process_prefixs(prefixs_tasks):
+        prefixs = list(prefixs_tasks.values())
+        print(len(prefixs))
+        padding ="max_length" if data_args.pad_to_max_length else "longest"
+        t_model.eval()
+        with torch.no_grad():
+            pooled_sentence_list = []
+            g = 256
+            for i in range(0, len(prefixs), g):
+                last = i + g if i + g < len(prefixs) else len(prefixs)
+                prefix_inputs = tokenizer(
+                    prefixs[i: last],
+                    max_length=data_args.max_target_length,
+                    padding=padding,
+                    return_tensors="pt",
+                    truncation=True,
+                    pad_to_multiple_of=8 if training_args.fp16 else None
+                )
+                prefix_inputs = prefix_inputs.to(t_model.device)
+                hidden_states = t_model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
+                
+                if pooling == 'first_last_avg':
+                    pooled_sentence = (hidden_states[-1] + hidden_states[1]).mean(dim=1)
+                elif pooling == 'last_avg':
+                    pooled_sentence = (hidden_states[-1]).mean(dim=1)
+                elif pooling == 'last2avg':
+                    pooled_sentence = (hidden_states[-1] + hidden_states[-2]).mean(dim=1)
+                else:
+                    raise Exception("unknown pooling {}".format(pooling))
+                pooled_sentence_list.append(pooled_sentence)
 
-    with training_args.main_process_first(desc="dataset map pre-processing"):
-        raw_datasets = raw_datasets.map(
-            preprocess_function,
-            batched=True,
-            batch_size=2048,
-            load_from_cache_file=not data_args.overwrite_cache,
-            desc="Running tokenizer on dataset",
-        )
-
+            pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
+            kernel, bias = compute_kernel_bias(pooled_sentence, 255)
+            pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
+        return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist()))
+    
+    label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
+    pooling = data_args.pooling
+    prefixs_tasks = {}
+    # raw_datasets['train'] = raw_datasets['train'].select(range(1000))
+    # raw_datasets['test'] = raw_datasets['test'].select(range(100))
+    raw_datasets = raw_datasets.map(
+        preprocess_function,
+        batched=True,
+        batch_size=2048,
+        load_from_cache_file=not data_args.overwrite_cache,
+        desc="Running tokenizer on dataset",
+    )
+    task_features = process_prefixs(prefixs_tasks)
     if training_args.label_smoothing_factor > 0 and not hasattr(model, "prepare_decoder_input_ids_from_labels"):
         logger.warning(
             "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
@@ -629,7 +668,6 @@ def main():
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
 
     # Data collator
-    label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     data_collator = DataCollatorForNI(
         tokenizer,
         model=model,
@@ -644,7 +682,8 @@ def main():
         num_neg_examples=data_args.num_neg_examples,
         add_explanation=data_args.add_explanation,
         tk_instruct=data_args.tk_instruct,
-        kd=True
+        kd=True,
+        task_features=task_features
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
     # and some of the information will aslo be used in evaluation.
