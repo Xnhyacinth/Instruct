@@ -167,6 +167,12 @@ class ModelArguments:
             "help": "Whether to select layers for hd & attn loss."
         },
     )
+    prompt: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use full prompt."
+        },
+    )
 
 
 @dataclass

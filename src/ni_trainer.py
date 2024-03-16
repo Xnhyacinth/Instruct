@@ -147,8 +147,11 @@ class NIKDTrainer(Seq2SeqTrainer):
         
         # prefix_encodings = self.get_features(inputs[1])
         # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
-        
-        outputs = model(**inputs[1], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
+        if self.config.prompt:
+            inputs[0]["features"] = inputs[1]["features"]
+            outputs = model(**inputs[0], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
+        else:
+            outputs = model(**inputs[1], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
         loss = (
@@ -157,7 +160,7 @@ class NIKDTrainer(Seq2SeqTrainer):
             )
         
         if self.config.use_kl:
-            loss += self.cal_kl(logits, t_logits) / 10
+            loss += self.cal_kl(logits, t_logits)# / 10
         if self.config.use_hd:
             loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"), inputs[1]["attention_mask"])
             loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states"), inputs[1]["attention_mask"])

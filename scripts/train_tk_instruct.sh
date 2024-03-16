@@ -23,11 +23,14 @@ lr=${5:-"5e-5"}
 echo "lr: ${lr}"
 e=${6:-"0"}
 tune=${7:-"full"}
-warmup_ratio=${8:-"0.00"}
-r=${9:-"16"}
-allenai=${10:-"0"}
-use_kl=${11:-"False"}
+epoch=${8:-"3"}
+warmup_ratio=${9:-"0.03"}
+r=${10:-"16"}
+allenai=${11:-"0"}
+use_kl=${12:-"False"}
+prompt=${13:-"0"}
 cache="./cache"
+echo epoch: ${epoch}
 name=experiment-${model}_lr${lr}_warm${warmup_ratio}
 output_dir=output/${model}_lr${lr}_warm${warmup_ratio}
 extra_args="--evaluation_strategy no"
@@ -61,6 +64,11 @@ if [ "$tune" == "kd" ];then
     fi
     extra_args="${extra_args} --t_model ${t_model} --name hyperlora_kd --temperature 3.0 --use_kl ${use_kl}"
 fi
+if [ "$prompt" == "fullprompt" ];then
+    name="${name}_${prompt}"
+    output_dir="${output_dir}_${prompt}"
+    extra_args="${extra_args} --prompt True"
+fi
 echo name: ${name}
 echo run_file: ${run_file}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
@@ -89,7 +97,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --per_device_eval_batch_size ${bs} \
     --gradient_accumulation_steps 2 \
     --learning_rate ${lr} \
-    --num_train_epochs 3 \
+    --num_train_epochs ${epoch} \
     --lr_scheduler_type constant \
     --warmup_ratio ${warmup_ratio} \
     --logging_strategy steps \
