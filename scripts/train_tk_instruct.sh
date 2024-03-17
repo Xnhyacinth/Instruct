@@ -29,6 +29,7 @@ r=${10:-"16"}
 allenai=${11:-"0"}
 use_kl=${12:-"False"}
 prompt=${13:-"0"}
+ffn=${14:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment-${model}_lr${lr}_warm${warmup_ratio}
@@ -62,7 +63,14 @@ if [ "$tune" == "kd" ];then
         output_dir="${output_dir}_kl"
         use_kl=True
     fi
-    extra_args="${extra_args} --t_model ${t_model} --name hyperlora_kd --temperature 3.0 --use_kl ${use_kl}"
+    lora=hyperlora_kd
+    if [ "$ffn" == "ffn" ];then
+        name="${name}_ffn"
+        output_dir="${output_dir}_ffn"
+        lora="${lora}_ffn"
+    fi
+    
+    extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --use_kl ${use_kl}"
 fi
 if [ "$prompt" == "fullprompt" ];then
     name="${name}_${prompt}"

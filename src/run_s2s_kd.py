@@ -421,7 +421,7 @@ def main():
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
         trainable_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        return total_num, trainable_num
+        return trainable_num, total_num
     
     model.resize_token_embeddings(len(tokenizer))
     model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
@@ -745,6 +745,8 @@ def main():
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
 
+        # torch.save(trainer.model.hypernet.state_dict(), model_args.save_adapter_path)
+        
         metrics = train_result.metrics
         max_train_samples = (
             data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
