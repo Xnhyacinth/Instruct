@@ -189,7 +189,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         """
         args = self.args
         self._max_length = 64
-        self._num_beams = 4
+        self._num_beams = 2
         prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
 
         # if eval is called w/o train init deepspeed here
@@ -258,7 +258,12 @@ class NIKDTrainer(Seq2SeqTrainer):
                     batch_size = observed_batch_size
 
             # Prediction step
-            loss, logits, labels = self.prediction_step(model, inputs[1], prediction_loss_only, ignore_keys=ignore_keys)
+            if self.config.prompt:
+                inputs[0]["features"] = inputs[1]["features"]
+                input = inputs[0]
+            else:
+                input = inputs[1]
+            loss, logits, labels = self.prediction_step(model, input, prediction_loss_only, ignore_keys=ignore_keys)
 
             if is_torch_tpu_available():
                 xm.mark_step()
