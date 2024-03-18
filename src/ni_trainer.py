@@ -186,7 +186,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         if self.config.use_attn:
             loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions")) * 1000
             loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions")) * 10
-
+            loss = loss.to(torch.bfloat16)
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()
         # loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))

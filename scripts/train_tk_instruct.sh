@@ -43,7 +43,7 @@ if [ "$e" == "eval" ];then
     name="${name}-eval"
     data_dir="${data_dir}_eval"
     output_dir="${output_dir}_eval"
-    extra_args="--evaluation_strategy steps --do_eval --eval_steps 2500"
+    extra_args="--evaluation_strategy steps --do_eval --eval_steps 2500 --load_best_model_at_end True"
     echo name: ${name}
 fi
 if [ "$tune" != "full" ];then
