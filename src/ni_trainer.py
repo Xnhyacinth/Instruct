@@ -123,7 +123,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         )
         return torch.sigmoid(kl_loss) * kl_loss
     
-    def cal_hd(self, hd, t_hd, context_mask):
+    def cal_hd(self, hd, t_hd, context_mask=None):
         if self.config.select:
             hd = [hd[0], hd[len(hd) // 2], hd[-1]]
             t_hd = [t_hd[0], t_hd[len(t_hd) // 2], t_hd[-1]]
@@ -131,24 +131,21 @@ class NIKDTrainer(Seq2SeqTrainer):
         loss_h = [cos_loss(
                 h,
                 t_h,
-                context_mask.view(context_mask.size(0) * context_mask.size(1), -1),
+                context_mask if context_mask is None else context_mask.view(context_mask.size(0) * context_mask.size(1), -1),
             )
             for h, t_h in zip(hd, t_hd)
         ]
-        print(sum(loss_h) / len(loss_h))
         return sum(loss_h) / len(loss_h)
     
-    def cal_attn(self, attn, t_attn, context_mask):
+    def cal_attn(self, attn, t_attn, context_mask=None):
         if self.config.select:
             attn = [attn[0], attn[len(attn) // 2], attn[-1]]
             t_attn = [t_attn[0], t_attn[len(t_attn) // 2], t_attn[-1]]
 
         loss_a = [
-            att_mse_loss(a.repeat(1, t_a.size(0) // a.size(0), 1, 1).view(-1, a.size(1), a.size(2), a.size(3)),
-                            t_a, context_mask.view(context_mask.size(0) * context_mask.size(1), -1).repeat(t_a.size(0) // a.size(0), 1))
+            att_mse_loss(a, t_a, context_mask if context_mask is None else context_mask.view(context_mask.size(0) * context_mask.size(1), -1))
             for a, t_a in zip(attn, t_attn)
         ]
-        print(sum(loss_a) / len(loss_a))
         return sum(loss_a) / len(loss_a)
     
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -184,11 +181,11 @@ class NIKDTrainer(Seq2SeqTrainer):
         if self.config.use_kl:
             loss = self.cal_kl(logits, t_logits) * 0.4 + loss * 0.6
         if self.config.use_hd:
-            loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"), input["attention_mask"])
-            loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states"), input["attention_mask"])
+            loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"))
+            loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states")) * 10
         if self.config.use_attn:
-            loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions"), input["attention_mask"])
-            loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions"), input["attention_mask"])
+            loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions")) * 1000
+            loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions")) * 10
 
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()

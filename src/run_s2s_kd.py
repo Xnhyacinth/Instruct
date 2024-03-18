@@ -651,8 +651,8 @@ def main():
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     pooling = data_args.pooling
     prefixs_tasks = {}
-    raw_datasets['train'] = raw_datasets['train'].select(range(1000))
-    raw_datasets['test'] = raw_datasets['test'].select(range(100))
+    # raw_datasets['train'] = raw_datasets['train'].select(range(1000))
+    # raw_datasets['test'] = raw_datasets['test'].select(range(100))
     raw_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
