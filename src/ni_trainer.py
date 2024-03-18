@@ -94,6 +94,27 @@ class NIKDTrainer(Seq2SeqTrainer):
         pooled_sentence = self.transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
         return pooled_sentence
     
+    def query_logits_distill(self,
+                                   s_logits,
+                                   t_logits,
+                                   s_input_attention_mask,
+                                   t_input_attention_mask,
+                                   ):
+        loss_fn = nn.KLDivLoss(reduction="batchmean")
+        # extract the s_logits
+        flat_s_logits = s_logits.reshape(-1, s_logits.shape[-1]).contiguous()
+        flat_t_logits = t_logits.reshape(-1, t_logits.shape[-1]).contiguous()
+        flat_t_attention_mask = t_input_attention_mask.reshape(-1, 1).contiguous().bool()
+        flat_s_attention_mask = s_input_attention_mask.reshape(-1, 1).contiguous().bool()
+        select_s_logits = torch.masked_select(flat_s_logits, flat_s_attention_mask).reshape(-1, flat_s_logits.shape[-1])
+        select_t_logits = torch.masked_select(flat_t_logits, flat_t_attention_mask).reshape(-1, flat_t_logits.shape[-1])
+
+        kl_loss = loss_fn(
+            F.log_softmax(select_s_logits/self.model_args.temperature, dim=1),
+            F.softmax(select_t_logits/self.model_args.temperature, dim=1)
+        )
+        return kl_loss
+    
     def cal_kl(self, logits, t_logits):
         p_s = F.log_softmax(logits / 4.0, dim=-1)
         p_t = F.softmax(t_logits / 4.0, dim=-1)
@@ -149,24 +170,25 @@ class NIKDTrainer(Seq2SeqTrainer):
         # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
         if self.config.prompt:
             inputs[0]["features"] = inputs[1]["features"]
-            outputs = model(**inputs[0], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
+            input = inputs[0]
         else:
-            outputs = model(**inputs[1], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
+            input = inputs[1]
+        outputs = model(**input, return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
-        loss = (
-                self.config.alpha_kd * self.cal_loss(logits, t_logits, self.config.temperature)
-                + (1 - self.config.alpha_kd) * loss
-            )
-        
+        if self.config.use_ce:
+            loss = (
+                    self.config.alpha_kd * self.cal_loss(logits, t_logits, self.config.temperature)
+                    + (1 - self.config.alpha_kd) * loss
+                )
         if self.config.use_kl:
-            loss = self.cal_kl(logits, t_logits) * 0.2 + loss * 0.8
+            loss = self.cal_kl(logits, t_logits) * 0.4 + loss * 0.6
         if self.config.use_hd:
-            loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"), inputs[1]["attention_mask"])
-            loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states"), inputs[1]["attention_mask"])
+            loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"), input["attention_mask"])
+            loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states"), input["attention_mask"])
         if self.config.use_attn:
-            loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions"), inputs[1]["attention_mask"])
-            loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions"), inputs[1]["attention_mask"])
+            loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions"), input["attention_mask"])
+            loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions"), input["attention_mask"])
 
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()

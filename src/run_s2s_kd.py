@@ -149,6 +149,12 @@ class ModelArguments:
             "help": "Whether to use kl loss."
         },
     )
+    use_ce: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use ce loss."
+        },
+    )
     use_hd: bool = field(
         default=False,
         metadata={
@@ -171,6 +177,12 @@ class ModelArguments:
         default=False,
         metadata={
             "help": "Whether to use full prompt."
+        },
+    )
+    kd: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to knowledge distillation."
         },
     )
 
@@ -425,19 +437,22 @@ def main():
     
     model.resize_token_embeddings(len(tokenizer))
     model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
+    if model_args.load_hypernet_weights is not None:
+        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
     trainable_params, all_param = get_parameter_number(model)
     logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
 
-    t_model = AutoModelForSeq2SeqLM.from_pretrained(
-        model_args.t_model,
-        from_tf=bool(".ckpt" in model_args.t_model),
-        # cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    ).cuda()
-    for layer in t_model.modules():
-        for _, param in layer.named_parameters():
-            param.requires_grad = False
+    if model_args.kd:
+        t_model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_args.t_model,
+            from_tf=bool(".ckpt" in model_args.t_model),
+            # cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        ).cuda()
+        for layer in t_model.modules():
+            for _, param in layer.named_parameters():
+                param.requires_grad = False
     
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
@@ -636,8 +651,8 @@ def main():
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     pooling = data_args.pooling
     prefixs_tasks = {}
-    # raw_datasets['train'] = raw_datasets['train'].select(range(1000))
-    # raw_datasets['test'] = raw_datasets['test'].select(range(100))
+    raw_datasets['train'] = raw_datasets['train'].select(range(1000))
+    raw_datasets['test'] = raw_datasets['test'].select(range(100))
     raw_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
@@ -744,6 +759,12 @@ def main():
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
+
+        save_state = {}
+        for param_tensor in model.state_dict():
+            if 'hypernet' in param_tensor:
+                save_state.update({param_tensor:model.state_dict()[param_tensor]})
+        torch.save(save_state, f'{training_args.output_dir}/hypernet_weights.pt')
 
         # torch.save(trainer.model.hypernet.state_dict(), model_args.save_adapter_path)
         

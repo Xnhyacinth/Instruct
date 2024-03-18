@@ -54,7 +54,12 @@ fi
 if [ "$tune" == "kd" ];then
     t_model=output/${model}_lr5e-5
     if [ "$allenai" == "allenai" ];then
-        t_model=allenai/tk-instruct-3b-def-pos
+        if [ "$model" == "t5-base" ];then
+            t_model=allenai/tk-instruct-base-def-pos
+        fi
+        if [ "$model" == "t5-xl" ];then
+            t_model=allenai/tk-instruct-3b-def-pos
+        fi
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
     fi
@@ -70,7 +75,7 @@ if [ "$tune" == "kd" ];then
         lora="${lora}_ffn"
     fi
     
-    extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --use_kl ${use_kl}"
+    extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --use_kl ${use_kl} --kd True"
 fi
 if [ "$prompt" == "fullprompt" ];then
     name="${name}_${prompt}"

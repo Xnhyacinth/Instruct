@@ -418,8 +418,7 @@ class AdapterWrapper(nn.Module):
                 self.encoding_dim, input_dim * 4, self.embedding_dim * 8, down_dim)
         
         if weights is not None:
-            self.hypernet.load_state_dict(torch.load(
-                weights, map_location=torch.device('cpu')))
+            self.hypernet.load_state_dict(torch.load(weights, map_location=torch.device('cpu'), strict=False))
             print("WEIGHTS LOADED")
 
         # self.earth_mover_loss = SamplesLoss(loss="sinkhorn", p=2)
@@ -538,7 +537,7 @@ class AdapterWrapper(nn.Module):
         if include_original:
             inputs["original_embedding"] = original_embedding
             inputs["original_mask"] = original_mask
-
+        
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
         if 'hyperlora' in self.args.name:
@@ -555,6 +554,7 @@ class AdapterWrapper(nn.Module):
             self.ffn_en_hypernet_wo.up_hypernet.set_features(self.emb(features))
             self.ffn_de_hypernet_wo.down_hypernet.set_features(self.emb(features))
             self.ffn_de_hypernet_wo.up_hypernet.set_features(self.emb(features))
+        
         outputs = self.model(**inputs)
 
         return outputs
