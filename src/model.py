@@ -378,6 +378,21 @@ class HyperNet(nn.Module):
         return weight, bias
 
 
+class MyPooler(nn.Module):
+    def __init__(self, s_hidden_size, t_hidden_size):
+        super().__init__()
+        self.dense = nn.Linear(s_hidden_size, t_hidden_size)
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = hidden_states.to(torch.bfloat16)
+        flat_hidden_states = hidden_states.reshape(-1, hidden_states.shape[-1])
+        pooled_output = self.dense(flat_hidden_states)
+        pooled_output = self.activation(pooled_output)
+        nested_output = pooled_output.reshape(*hidden_states.shape[:-1], -1)
+        return nested_output
+    
+
 class AdapterWrapper(nn.Module):
     """
     General Wrapper Class for Hypernet Config
@@ -396,6 +411,7 @@ class AdapterWrapper(nn.Module):
         self.config = model.config
         down_dim = model.config.d_kv * model.config.num_heads
         input_dim = model.config.d_model
+        self.adap_pooler = MyPooler(input_dim, self.encoding_dim)
 
         self.hypernet = HyperNet(
             self.encoding_dim, input_dim, self.embedding_dim, down_dim)
@@ -538,6 +554,9 @@ class AdapterWrapper(nn.Module):
             inputs["original_embedding"] = original_embedding
             inputs["original_mask"] = original_mask
         
+        if not self.args.whitening:
+            features = self.adap_pooler(features)
+        
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
         if 'hyperlora' in self.args.name:
@@ -562,6 +581,10 @@ class AdapterWrapper(nn.Module):
     def generate(self, input_ids, attention_mask, features=None, **kwargs):
         inputs = {"input_ids": input_ids,
                   "attention_mask": attention_mask, **kwargs}
+        
+        if not self.args.whitening:
+            features = self.adap_pooler(features)
+            
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
         if 'hyperlora' in self.args.name:

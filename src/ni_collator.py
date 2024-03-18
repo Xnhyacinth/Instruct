@@ -138,6 +138,7 @@ class DataCollatorForNI:
                     sources.append(source)
                 else:
                     sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
+
         else:
             sources, prefixs, instances = [], [], []
             for instance in batch:

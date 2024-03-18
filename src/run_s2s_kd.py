@@ -185,6 +185,12 @@ class ModelArguments:
             "help": "Whether to knowledge distillation."
         },
     )
+    whitening: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use whitening algorithm."
+        },
+    )
 
 
 @dataclass
@@ -610,6 +616,7 @@ def main():
             instances.append(task_input)
         sample['source'] = sources
         sample['instance'] = instances
+        sample['prefix'] = prefixs
         return sample
     
     def process_prefixs(prefixs_tasks):
@@ -644,15 +651,16 @@ def main():
                 pooled_sentence_list.append(pooled_sentence)
 
             pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
-            kernel, bias = compute_kernel_bias(pooled_sentence, 255)
-            pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
+            if model_args.whitening:
+                kernel, bias = compute_kernel_bias(pooled_sentence, 255)
+                pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
         return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist()))
     
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     pooling = data_args.pooling
     prefixs_tasks = {}
-    # raw_datasets['train'] = raw_datasets['train'].select(range(1000))
-    # raw_datasets['test'] = raw_datasets['test'].select(range(100))
+    raw_datasets['train'] = raw_datasets['train'].select(range(1000))
+    raw_datasets['test'] = raw_datasets['test'].select(range(100))
     raw_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
@@ -703,7 +711,7 @@ def main():
         num_neg_examples=data_args.num_neg_examples,
         add_explanation=data_args.add_explanation,
         tk_instruct=data_args.tk_instruct,
-        kd=True,
+        kd=model_args.kd,
         task_features=task_features
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 

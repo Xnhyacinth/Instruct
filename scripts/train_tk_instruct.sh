@@ -30,6 +30,7 @@ allenai=${11:-"0"}
 use_kl=${12:-"False"}
 prompt=${13:-"0"}
 ffn=${14:-"0"}
+whitening=${15:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment-${model}_lr${lr}_warm${warmup_ratio}
@@ -95,6 +96,11 @@ if [ "$prompt" == "fullprompt" ];then
     name="${name}_${prompt}"
     output_dir="${output_dir}_${prompt}"
     extra_args="${extra_args} --prompt True"
+fi
+name="${name}_$whitening"
+output_dir="${output_dir}_$whitening"
+if [ "$whitening" == "whitening" ];then
+    extra_args="${extra_args} --whitening True"
 fi
 echo name: ${name}
 echo run_file: ${run_file}
