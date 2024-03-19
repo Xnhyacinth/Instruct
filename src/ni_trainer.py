@@ -121,7 +121,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         kl_loss = (
             F.kl_div(p_s, p_t, reduction='batchmean')
         )
-        return torch.sigmoid(kl_loss) * kl_loss / 2
+        return torch.sigmoid(kl_loss) * kl_loss
     
     def cal_hd(self, hd, t_hd, context_mask=None):
         if self.config.select:
