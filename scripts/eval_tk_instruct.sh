@@ -20,6 +20,10 @@ if [ "$allenai" == "allenai" ];then
     fi
     if [ "$model" == "t5-xl" ];then
         model=allenai/tk-instruct-3b-def-pos
+        if [ "$pos" == "0" ];then
+            model=allenai/tk-instruct-3b-def
+        if 
+    fi
     fi
     name="${name}_allenai"
     output_dir="${output_dir}_allenai"
