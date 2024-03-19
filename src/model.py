@@ -574,7 +574,7 @@ class AdapterWrapper(nn.Module):
             self.ffn_de_hypernet_wo.down_hypernet.set_features(self.emb(features))
             self.ffn_de_hypernet_wo.up_hypernet.set_features(self.emb(features))
         
-        input_ids_embeds = self.model.get_input_embeddings()(input_ids)
+        # input_ids_embeds = self.model.get_input_embeddings()(input_ids)
         
         outputs = self.model(**inputs)
 
