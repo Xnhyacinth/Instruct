@@ -31,6 +31,7 @@ use_kl=${12:-"False"}
 prompt=${13:-"0"}
 ffn=${14:-"0"}
 whitening=${15:-"0"}
+pos=${15:-"2"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment-${model}_lr${lr}_warm${warmup_ratio}
@@ -97,7 +98,7 @@ if [ "$prompt" == "fullprompt" ];then
     output_dir="${output_dir}_${prompt}"
     extra_args="${extra_args} --prompt True"
 fi
-name="${name}_$whitening"
+name="${name}_${whitening}_pos${pos}"
 output_dir="${output_dir}_$whitening"
 if [ "$whitening" == "whitening" ];then
     extra_args="${extra_args} --whitening True"
@@ -116,7 +117,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --max_num_instances_per_eval_task 100 \
     --add_task_name False \
     --add_task_definition True \
-    --num_pos_examples 2 \
+    --num_pos_examples ${pos} \
     --num_neg_examples 0 \
     --add_explanation False \
     --tk_instruct False \
