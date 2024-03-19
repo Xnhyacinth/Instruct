@@ -9,9 +9,10 @@ gpus=${2:-"8"}
 echo "GPU: ${gpus}"
 model=${3:-"t5-large"}
 batch_size=${4:-"8"}
+pos=${5:-"2"}
 model=google/${model}-lm-adapt
 echo "model: ${model}"
-out="output/${model}_eval"
+out="output/${model}_eval_pos${pos}"
 python src/run_s2s.py \
     --do_predict \
     --predict_with_generate \
@@ -24,7 +25,7 @@ python src/run_s2s.py \
     --max_num_instances_per_eval_task 100 \
     --add_task_name False \
     --add_task_definition True \
-    --num_pos_examples 2 \
+    --num_pos_examples ${pos} \
     --num_neg_examples 0 \
     --add_explanation False \
     --tk_instruct False \

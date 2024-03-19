@@ -298,6 +298,10 @@ class DataTrainingArguments:
         default=0,
         metadata={"help": "number of in-context positive examples."}
     )
+    s_num_pos_examples: Optional[int] = field(
+        default=0,
+        metadata={"help": "number of in-context positive examples."}
+    )
     num_neg_examples: Optional[int] = field(
         default=0,
         metadata={"help": "number of in-context negative examples."}
@@ -522,13 +526,14 @@ def main():
         return vecs / (vecs**2).sum(axis=1, keepdims=True)**0.5
     
     def preprocess_function(sample):
-        sources, prefixs, instances = [], [], []
+        sources, prefixs, instances, s_sources = [], [], [], []
         for instance, task, defi, pos, neg in zip(sample['Instance'], sample['Task'], sample['Definition'], sample['Positive Examples'], sample['Negative Examples']):
             add_task_name = data_args.add_task_name
             add_task_definition = data_args.add_task_definition
             num_pos_examples = data_args.num_pos_examples
             num_neg_examples = data_args.num_neg_examples
             add_explanation = data_args.add_explanation 
+            s_num_pos_examples = data_args.s_num_pos_examples
 
             task_input = ""
             # add the input first.
@@ -600,12 +605,18 @@ def main():
                     break 
             
             source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
+            s_source = task_name + definition + "".join(pos_examples[:s_num_pos_examples]) + task_input
             tokenized_source = tokenizer(source)["input_ids"]
             if len(tokenized_source) <= data_args.max_source_length:
                 sources.append(source)
             else:
                 sources.append(tokenizer.decode(tokenized_source[:data_args.max_source_length], skip_special_tokens=True))
-            
+            tokenized_s_source = tokenizer(s_source)["input_ids"]
+            if len(tokenized_s_source) <= data_args.max_source_length:
+                s_sources.append(s_source)
+            else:
+                s_sources.append(tokenizer.decode(tokenized_s_source[:data_args.max_source_length], skip_special_tokens=True))
+                
             # prefix
             prefix = task_name + definition + "".join(pos_examples) + "".join(neg_examples)
             prefixs.append(prefix)
@@ -615,6 +626,7 @@ def main():
             # instance
             instances.append(task_input)
         sample['source'] = sources
+        sample['s_source'] = s_sources
         sample['instance'] = instances
         sample['prefix'] = prefixs
         return sample
