@@ -12,8 +12,7 @@ batch_size=${4:-"8"}
 pos=${5:-"2"}
 allenai=${6:-"0"}
 model=google/${model}-lm-adapt
-echo "model: ${model}"
-out="output/${model}_eval_pos${pos}"
+
 if [ "$allenai" == "allenai" ];then
     if [ "$model" == "t5-base" ];then
         model=allenai/tk-instruct-base-def-pos
@@ -24,9 +23,10 @@ if [ "$allenai" == "allenai" ];then
             model=allenai/tk-instruct-3b-def 
         fi
     fi
-    name="${name}_allenai"
-    output_dir="${output_dir}_allenai"
 fi
+out="output/${model}_eval_pos${pos}"
+echo "model: ${model}"
+echo ${out}
 python src/run_s2s.py \
     --do_predict \
     --predict_with_generate \
