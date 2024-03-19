@@ -121,7 +121,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         kl_loss = (
             F.kl_div(p_s, p_t, reduction='batchmean')
         )
-        return torch.sigmoid(kl_loss) * kl_loss
+        return torch.sigmoid(kl_loss) * kl_loss / 2
     
     def cal_hd(self, hd, t_hd, context_mask=None):
         if self.config.select:
@@ -179,7 +179,7 @@ class NIKDTrainer(Seq2SeqTrainer):
                     + (1 - self.config.alpha_kd) * loss
                 )
         if self.config.use_kl:
-            loss = self.cal_kl(logits, t_logits) * 0.4 + loss * 0.6
+            loss = self.cal_kl(logits, t_logits) * 0.2 + loss * 0.8
         if self.config.use_hd:
             loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"))
             loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states")) * 10
