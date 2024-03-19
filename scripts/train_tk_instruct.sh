@@ -31,7 +31,7 @@ use_kl=${12:-"False"}
 prompt=${13:-"0"}
 ffn=${14:-"0"}
 whitening=${15:-"0"}
-pos=${15:-"2"}
+pos=${16:-"2"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment-${model}_lr${lr}_warm${warmup_ratio}
@@ -99,7 +99,7 @@ if [ "$prompt" == "fullprompt" ];then
     extra_args="${extra_args} --prompt True"
 fi
 name="${name}_${whitening}_pos${pos}"
-output_dir="${output_dir}_$whitening"
+output_dir="${output_dir}_${whitening}_pos${pos}"
 if [ "$whitening" == "whitening" ];then
     extra_args="${extra_args} --whitening True"
 fi
