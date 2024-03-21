@@ -1,4 +1,9 @@
 set -x
+###
+ # Copyright (c) 2024 by Huanxuan Liao, huanxuanliao@gmail.com, All Rights Reserved. 
+ # @Author: Xnhyacinth, Xnhyacinth@qq.com
+ # @Date: 2024-03-21 21:44:24
+### 
 # export CUDA_DEVICE_ORDER="PCI_BUS_ID"
 # export TRANSFORMERS_CACHE=/home/yizhongw/.cache/huggingface
 # allenai/tk-instruct-3b-def-pos
@@ -7,17 +12,16 @@ num_gpus=${1:-"1"}
 echo "GPU counts: ${num_gpus}"
 gpus=${2:-"8"}
 echo "GPU: ${gpus}"
-model=${3:-"t5-large"}
+m=${3:-"t5-large"}
 batch_size=${4:-"8"}
 pos=${5:-"2"}
 allenai=${6:-"0"}
-model=google/${model}-lm-adapt
-
+model=google/${m}-lm-adapt
 if [ "$allenai" == "allenai" ];then
-    if [ "$model" == "t5-base" ];then
+    if [ "$m" == "t5-base" ];then
         model=allenai/tk-instruct-base-def-pos
     fi
-    if [ "$model" == "t5-xl" ];then
+    if [ "$m" == "t5-xl" ];then
         model=allenai/tk-instruct-3b-def-pos
         if [ "$pos" == "0" ];then
             model=allenai/tk-instruct-3b-def 
