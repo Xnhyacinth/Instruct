@@ -61,6 +61,9 @@ if [ "$tune" == "kd" ];then
         fi
         if [ "$model" == "t5-xl" ];then
             t_model=allenai/tk-instruct-3b-def-pos
+            if [ "$pos" == "0" ];then
+                model=allenai/tk-instruct-3b-def 
+            fi
         fi
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
@@ -92,16 +95,17 @@ if [ "$tune" == "kd" ];then
         lora="${lora}_ffn"
     fi
     extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --kd True"
-fi
-if [ "$prompt" == "fullprompt" ];then
-    name="${name}_${prompt}"
-    output_dir="${output_dir}_${prompt}"
-    extra_args="${extra_args} --prompt True"
-fi
-name="${name}_${whitening}_pos${pos}"
-output_dir="${output_dir}_${whitening}_pos${pos}"
-if [ "$whitening" == "whitening" ];then
-    extra_args="${extra_args} --whitening True"
+
+    if [ "$prompt" == "fullprompt" ];then
+        name="${name}_${prompt}"
+        output_dir="${output_dir}_${prompt}"
+        extra_args="${extra_args} --prompt True"
+    fi
+    name="${name}_${whitening}_pos${pos}"
+    output_dir="${output_dir}_${whitening}_pos${pos}"
+    if [ "$whitening" == "whitening" ];then
+        extra_args="${extra_args} --whitening True"
+    fi
 fi
 echo name: ${name}
 echo run_file: ${run_file}
