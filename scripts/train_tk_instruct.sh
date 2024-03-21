@@ -95,7 +95,6 @@ if [ "$tune" == "kd" ];then
         lora="${lora}_ffn"
     fi
     extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --kd True"
-
     if [ "$prompt" == "fullprompt" ];then
         name="${name}_${prompt}"
         output_dir="${output_dir}_${prompt}"
