@@ -458,7 +458,7 @@ def main():
                 param.requires_grad = False
         model_args.d_model = t_model.config.d_model
     
-    model.resize_token_embeddings(len(tokenizer))
+    # model.resize_token_embeddings(len(tokenizer))
     model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     if model_args.load_hypernet_weights is not None:
         model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))

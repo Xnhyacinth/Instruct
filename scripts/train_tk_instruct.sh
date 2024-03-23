@@ -58,6 +58,9 @@ if [ "$tune" == "kd" ];then
     if [ "$allenai" == "allenai" ];then
         if [ "$model" == "t5-base" ];then
             t_model=allenai/tk-instruct-base-def-pos
+            if [ "$pos" == "0" ];then
+                t_model=output_pos0/t5-base_lr1e-4_warm0.05
+            fi
         fi
         if [ "$model" == "t5-xl" ];then
             t_model=allenai/tk-instruct-3b-def-pos
