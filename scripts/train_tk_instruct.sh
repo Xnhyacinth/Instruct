@@ -118,7 +118,7 @@ if [ "$tune" == "kd" ];then
     if [ "$s_pos" == "10" ];then
         s_pos=${pos}
     fi
-    if [ "$s_pos" != "10" ];then
+    if [ "$s_pos" != "$pos" ];then
         name="${name}_s_pos${s_pos}"
         output_dir="${output_dir}_s_pos${s_pos}"
     fi
