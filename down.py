@@ -15,7 +15,7 @@ from torch import tensor
 # print(data)
 # data.save_to_disk('dataset/Image/WQ')
 # model_name = 'openai-community/gpt2'
-model_name = 'google/t5-base-lm-adapt'
+model_name = 'google/t5-xl-lm-adapt'
 # tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
 # model = transformers.AutoModelForCausalLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
 tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
