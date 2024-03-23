@@ -34,8 +34,8 @@ whitening=${15:-"0"}
 pos=${16:-"2"}
 cache="./cache"
 echo epoch: ${epoch}
-name=experiment-${model}_lr${lr}_warm${warmup_ratio}
-output_dir=output/${model}_lr${lr}_warm${warmup_ratio}
+name=experiment_pos${pos}-${model}_lr${lr}_warm${warmup_ratio}
+output_dir=output_pos${pos}/${model}_lr${lr}_warm${warmup_ratio}
 extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 run_file=run_s2s.py
@@ -62,13 +62,13 @@ if [ "$tune" == "kd" ];then
         if [ "$model" == "t5-xl" ];then
             t_model=allenai/tk-instruct-3b-def-pos
             if [ "$pos" == "0" ];then
-                model=allenai/tk-instruct-3b-def 
+                t_model=allenai/tk-instruct-3b-def 
             fi
         fi
         if [ "$model" == "t5-xxl" ];then
             t_model=allenai/tk-instruct-11b-def-pos
             if [ "$pos" == "0" ];then
-                model=allenai/tk-instruct-11b-def 
+                t_model=allenai/tk-instruct-11b-def 
             fi
         fi
         name="${name}_allenai"
@@ -106,8 +106,8 @@ if [ "$tune" == "kd" ];then
         output_dir="${output_dir}_${prompt}"
         extra_args="${extra_args} --prompt True"
     fi
-    name="${name}_${whitening}_pos${pos}"
-    output_dir="${output_dir}_${whitening}_pos${pos}"
+    name="${name}_${whitening}"
+    output_dir="${output_dir}_${whitening}"
     if [ "$whitening" == "whitening" ];then
         extra_args="${extra_args} --whitening True"
     fi
