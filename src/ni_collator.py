@@ -218,7 +218,7 @@ class DataCollatorForNI:
                 if "decoder_input_ids" in t_model_inputs.keys():
                     model_inputs["decoder_input_ids"] = decoder_input_ids
             else:
-                model_inputs = t_model_inputs
+                model_inputs = t_model_inputs.copy()
             model_inputs["features"] = torch.Tensor(prefixs)
-                
+
             return t_model_inputs, model_inputs, instance_inputs
