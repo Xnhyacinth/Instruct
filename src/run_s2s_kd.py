@@ -463,7 +463,7 @@ def main():
         for layer in t_model.modules():
             for _, param in layer.named_parameters():
                 param.requires_grad = False
-        training_args.d_model = t_model.config.d_model
+        model_args.d_model = t_model.config.d_model
         
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
