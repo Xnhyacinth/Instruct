@@ -449,6 +449,7 @@ def main():
         t_model = AutoModelForSeq2SeqLM.from_pretrained(
             model_args.t_model,
             from_tf=bool(".ckpt" in model_args.t_model),
+            torch_dtype=torch.bfloat16,
             # cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
@@ -458,7 +459,7 @@ def main():
                 param.requires_grad = False
         model_args.d_model = t_model.config.d_model
     
-    # model.resize_token_embeddings(len(tokenizer))
+    model.resize_token_embeddings(len(tokenizer))
     model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     if model_args.load_hypernet_weights is not None:
         model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
@@ -661,7 +662,7 @@ def main():
                     pooled_sentence = (hidden_states[-1] + hidden_states[-2]).mean(dim=1)
                 else:
                     raise Exception("unknown pooling {}".format(pooling))
-                pooled_sentence_list.append(pooled_sentence)
+                pooled_sentence_list.append(pooled_sentence.float())
 
             pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
             if model_args.whitening:
@@ -672,8 +673,8 @@ def main():
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     pooling = data_args.pooling
     prefixs_tasks = {}
-    # raw_datasets['train'] = raw_datasets['train'].select(range(1000))
-    # raw_datasets['test'] = raw_datasets['test'].select(range(100))
+    # raw_datasets['train'] = raw_datasets['train'].select(range(200))
+    # raw_datasets['test'] = raw_datasets['test'].select(range(10))
     raw_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
@@ -725,7 +726,8 @@ def main():
         add_explanation=data_args.add_explanation,
         tk_instruct=data_args.tk_instruct,
         kd=model_args.kd,
-        task_features=task_features
+        task_features=task_features,
+        student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
     # and some of the information will aslo be used in evaluation.

@@ -32,6 +32,7 @@ prompt=${13:-"0"}
 ffn=${14:-"0"}
 whitening=${15:-"0"}
 pos=${16:-"2"}
+s_pos=${17:-"10"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}-${model}_lr${lr}_warm${warmup_ratio}
@@ -114,6 +115,13 @@ if [ "$tune" == "kd" ];then
     if [ "$whitening" == "whitening" ];then
         extra_args="${extra_args} --whitening True"
     fi
+    if [ "$s_pos" == "10" ];then
+        s_pos=${pos}
+    fi
+    if [ "$s_pos" != "10" ];then
+        name="${name}_s_pos${s_pos}"
+        output_dir="${output_dir}_s_pos${s_pos}"
+    fi
 fi
 echo name: ${name}
 echo run_file: ${run_file}
@@ -122,6 +130,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --do_predict \
     --predict_with_generate \
     --model_name_or_path google/${model}-lm-adapt \
+    --tokenizer_name google/t5-xl-lm-adapt \
     --max_source_length 1024 \
     --max_target_length 128 \
     --generation_max_length 128 \
@@ -130,6 +139,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --add_task_name False \
     --add_task_definition True \
     --num_pos_examples ${pos} \
+    --s_num_pos_examples ${s_pos} \
     --num_neg_examples 0 \
     --add_explanation False \
     --tk_instruct False \

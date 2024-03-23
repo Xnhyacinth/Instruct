@@ -165,11 +165,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         
         # prefix_encodings = self.get_features(inputs[1])
         # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
-        if self.config.prompt:
-            inputs[0]["features"] = inputs[1]["features"]
-            input = inputs[0]
-        else:
-            input = inputs[1]
+        input = inputs[1]
         outputs = model(**input, return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
@@ -277,11 +273,7 @@ class NIKDTrainer(Seq2SeqTrainer):
                     batch_size = observed_batch_size
 
             # Prediction step
-            if self.config.prompt:
-                inputs[0]["features"] = inputs[1]["features"]
-                input = inputs[0]
-            else:
-                input = inputs[1]
+            input = inputs[1]
             loss, logits, labels = self.prediction_step(model, input, prediction_loss_only, ignore_keys=ignore_keys)
 
             if is_torch_tpu_available():

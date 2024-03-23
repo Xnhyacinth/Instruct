@@ -27,6 +27,7 @@ class DataCollatorForNI:
     text_only: bool = False
     kd: bool = False
     task_features: dict = None
+    student_input: bool = False
     
 
     def __call__(self, batch, return_tensors=None):
@@ -140,15 +141,17 @@ class DataCollatorForNI:
                     sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
 
         else:
-            sources, prefixs, instances = [], [], []
+            sources, prefixs, instances, s_sources = [], [], [], []
             for instance in batch:
                 sources.append(instance["source"])
                 instances.append(instance["instance"])
                 prefixs.append(self.task_features[instance['Task']])
+                if self.student_input:
+                    s_sources.append(instance["s_source"])
         if self.text_only:
-            model_inputs = {"inputs": sources}
+            t_model_inputs = {"inputs": sources}
         else:
-            model_inputs = self.tokenizer(
+            t_model_inputs = self.tokenizer(
                 sources, 
                 max_length=self.max_source_length, 
                 padding=self.padding,
@@ -160,7 +163,7 @@ class DataCollatorForNI:
             # Randomly select one reference if multiple are provided.
             labels = [random.choice(ex["Instance"]["output"]) for ex in batch]
             if self.text_only:
-                model_inputs["labels"] = labels
+                t_model_inputs["labels"] = labels
             else:
                 with self.tokenizer.as_target_tokenizer():
                     labels = self.tokenizer(
@@ -172,16 +175,16 @@ class DataCollatorForNI:
                         pad_to_multiple_of=self.pad_to_multiple_of
                     )
                 label_mask = labels["attention_mask"].bool()
-                model_inputs["labels"] = labels["input_ids"].masked_fill(~label_mask, self.label_pad_token_id)
+                t_model_inputs["labels"] = labels["input_ids"].masked_fill(~label_mask, self.label_pad_token_id)
         else:
-            model_inputs["labels"] = None
+            t_model_inputs["labels"] = None
 
         # prepare decoder_input_ids
         if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels") and not self.text_only:
-            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=model_inputs["labels"])
-            model_inputs["decoder_input_ids"] = decoder_input_ids
+            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=t_model_inputs["labels"])
+            t_model_inputs["decoder_input_ids"] = decoder_input_ids
         if not self.kd:
-            return model_inputs
+            return t_model_inputs
         else:
             if self.text_only:
                 instance_inputs = {"inputs": instances}
@@ -195,8 +198,27 @@ class DataCollatorForNI:
                         truncation=True,
                         pad_to_multiple_of=self.pad_to_multiple_of
                     )
-            instance_inputs["labels"] = model_inputs["labels"]
+            instance_inputs["labels"] = t_model_inputs["labels"]
             instance_inputs["features"] = torch.Tensor(prefixs)
-            if "decoder_input_ids" in model_inputs.keys():
+            if "decoder_input_ids" in t_model_inputs.keys():
                 instance_inputs["decoder_input_ids"] = decoder_input_ids
-            return model_inputs, instance_inputs
+            if self.student_input:
+                if self.text_only:
+                    model_inputs = {"inputs": s_sources}
+                else:
+                    model_inputs = self.tokenizer(
+                        s_sources,
+                        max_length=self.max_source_length,
+                        padding=self.padding,
+                        return_tensors=self.return_tensors,
+                        truncation=True,
+                        pad_to_multiple_of=self.pad_to_multiple_of
+                    )
+                model_inputs["labels"] = t_model_inputs["labels"] 
+                if "decoder_input_ids" in t_model_inputs.keys():
+                    model_inputs["decoder_input_ids"] = decoder_input_ids
+            else:
+                model_inputs = t_model_inputs
+            model_inputs["features"] = torch.Tensor(prefixs)
+                
+            return t_model_inputs, model_inputs, instance_inputs
