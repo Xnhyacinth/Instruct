@@ -65,6 +65,12 @@ if [ "$tune" == "kd" ];then
                 model=allenai/tk-instruct-3b-def 
             fi
         fi
+        if [ "$model" == "t5-xxl" ];then
+            t_model=allenai/tk-instruct-11b-def-pos
+            if [ "$pos" == "0" ];then
+                model=allenai/tk-instruct-11b-def 
+            fi
+        fi
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
     fi
