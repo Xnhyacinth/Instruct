@@ -445,13 +445,6 @@ def main():
         trainable_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
         return trainable_num, total_num
     
-    model.resize_token_embeddings(len(tokenizer))
-    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
-    if model_args.load_hypernet_weights is not None:
-        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
-    trainable_params, all_param = get_parameter_number(model)
-    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
-
     if model_args.kd:
         t_model = AutoModelForSeq2SeqLM.from_pretrained(
             model_args.t_model,
@@ -464,7 +457,14 @@ def main():
             for _, param in layer.named_parameters():
                 param.requires_grad = False
         model_args.d_model = t_model.config.d_model
-        
+    
+    model.resize_token_embeddings(len(tokenizer))
+    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
+    if model_args.load_hypernet_weights is not None:
+        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
+    trainable_params, all_param = get_parameter_number(model)
+    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
             model.config.decoder_start_token_id = tokenizer.lang_code_to_id[data_args.lang]
