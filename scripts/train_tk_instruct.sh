@@ -130,7 +130,6 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --do_predict \
     --predict_with_generate \
     --model_name_or_path google/${model}-lm-adapt \
-    --tokenizer_name google/t5-xl-lm-adapt \
     --max_source_length 1024 \
     --max_target_length 128 \
     --generation_max_length 128 \
