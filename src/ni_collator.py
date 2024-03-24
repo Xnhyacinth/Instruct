@@ -27,6 +27,8 @@ class DataCollatorForNI:
     text_only: bool = False
     kd: bool = False
     task_features: dict = None
+    instruction_inputs: dict = None
+    custom_model: bool = False
     student_input: bool = False
     
 
@@ -141,13 +143,15 @@ class DataCollatorForNI:
                     sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
 
         else:
-            sources, prefixs, instances, s_sources = [], [], [], []
+            sources, prefixs, instances, s_sources, instruction_inputs = [], [], [], [], []
             for instance in batch:
-                sources.append(instance["source"])
-                instances.append(instance["instance"])
+                sources.append(instance["source"])     
                 prefixs.append(self.task_features[instance['Task']])
                 if self.student_input:
                     s_sources.append(instance["s_source"])
+                if self.custom_model:
+                    instances.append(instance["instance"])
+                    instruction_inputs.append(self.instruction_inputs[instance['Task']])
         if self.text_only:
             t_model_inputs = {"inputs": sources}
         else:
@@ -186,23 +190,24 @@ class DataCollatorForNI:
         if not self.kd:
             return t_model_inputs
         else:
-            if self.text_only:
-                instance_inputs = {"inputs": instances}
-            else:
-                with self.tokenizer.as_target_tokenizer():
-                    instance_inputs = self.tokenizer(
-                        instances,
-                        max_length=self.max_source_length,
-                        padding=self.padding,
-                        return_tensors=self.return_tensors,
-                        truncation=True,
-                        pad_to_multiple_of=self.pad_to_multiple_of
-                    )
-            instance_inputs["labels"] = t_model_inputs["labels"]
-            instance_inputs["features"] = torch.Tensor(prefixs)
-            if "decoder_input_ids" in t_model_inputs.keys():
-                instance_inputs["decoder_input_ids"] = decoder_input_ids
-            if self.student_input:
+            if self.custom_model:
+                if self.text_only:
+                    model_inputs = {"inputs": instances}
+                else:
+                    with self.tokenizer.as_target_tokenizer():
+                        model_inputs = self.tokenizer(
+                            instances,
+                            max_length=self.max_source_length,
+                            padding=self.padding,
+                            return_tensors=self.return_tensors,
+                            truncation=True,
+                            pad_to_multiple_of=self.pad_to_multiple_of
+                        )
+                model_inputs["labels"] = t_model_inputs["labels"]
+                if "decoder_input_ids" in t_model_inputs.keys():
+                    model_inputs["decoder_input_ids"] = decoder_input_ids
+                model_inputs["instruction_input"] = torch.Tensor(instruction_inputs)
+            elif self.student_input:
                 if self.text_only:
                     model_inputs = {"inputs": s_sources}
                 else:
@@ -220,5 +225,4 @@ class DataCollatorForNI:
             else:
                 model_inputs = t_model_inputs.copy()
             model_inputs["features"] = torch.Tensor(prefixs)
-
-            return t_model_inputs, model_inputs, instance_inputs
+            return t_model_inputs, model_inputs

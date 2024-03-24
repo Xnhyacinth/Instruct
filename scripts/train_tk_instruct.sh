@@ -33,6 +33,7 @@ ffn=${14:-"0"}
 whitening=${15:-"0"}
 pos=${16:-"2"}
 s_pos=${17:-"10"}
+custom=${18:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}-${model}_lr${lr}_warm${warmup_ratio}
@@ -121,6 +122,11 @@ if [ "$tune" == "kd" ];then
     if [ "$s_pos" != "$pos" ];then
         name="${name}_s_pos${s_pos}"
         output_dir="${output_dir}_s_pos${s_pos}"
+    fi
+    if [ "$custom" == "custom" ];then
+        name="${name}_custom"
+        output_dir="${output_dir}_custom"
+        extra_args="${extra_args} --custom_model True"
     fi
 fi
 echo name: ${name}

@@ -191,6 +191,12 @@ class ModelArguments:
             "help": "Whether to use whitening algorithm."
         },
     )
+    custom_model: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use concat for input."
+        },
+    )
 
 
 @dataclass
@@ -418,7 +424,15 @@ def main():
     # Distributed training:
     # The .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
-    config = AutoConfig.from_pretrained(
+    if model_args.custom_model:
+        from modeling_t5 import T5ForConditionalGeneration
+        from configuration_t5 import T5Config
+        model_cls = T5ForConditionalGeneration
+        config_cls = T5Config
+    else:
+        model_cls = AutoModelForSeq2SeqLM
+        config_cls = AutoConfig
+    config = config_cls.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         # cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
@@ -431,14 +445,14 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    model = AutoModelForSeq2SeqLM.from_pretrained(
+    model = model_cls.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
         # cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-    )
+    ).cuda()
     
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
@@ -460,39 +474,6 @@ def main():
         model_args.d_model = t_model.config.d_model
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
-    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
-    if model_args.load_hypernet_weights is not None:
-        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
-    trainable_params, all_param = get_parameter_number(model)
-    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
-
-    if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
-        if isinstance(tokenizer, MBartTokenizer):
-            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[data_args.lang]
-        else:
-            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(data_args.lang)
-
-    if model.config.decoder_start_token_id is None:
-        raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
-
-    if (
-        hasattr(model.config, "max_position_embeddings")
-        and model.config.max_position_embeddings < data_args.max_source_length
-    ):
-        if model_args.resize_position_embeddings is None:
-            logger.warning(
-                f"Increasing the model's number of position embedding vectors from {model.config.max_position_embeddings} "
-                f"to {data_args.max_source_length}."
-            )
-            model.resize_position_embeddings(data_args.max_source_length)
-        elif model_args.resize_position_embeddings:
-            model.resize_position_embeddings(data_args.max_source_length)
-        else:
-            raise ValueError(
-                f"`--max_source_length` is set to {data_args.max_source_length}, but the model only has {model.config.max_position_embeddings}"
-                f" position encodings. Consider either reducing `--max_source_length` to {model.config.max_position_embeddings} or to automatically "
-                "resize the model's position encodings by passing `--resize_position_embeddings`."
-            )
 
     if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
         assert (
@@ -620,7 +601,7 @@ def main():
                 s_sources.append(tokenizer.decode(tokenized_s_source[:data_args.max_source_length], skip_special_tokens=True))
                 
             # prefix
-            prefix = task_name + definition + "".join(pos_examples) + "".join(neg_examples)
+            prefix = task_name + definition + "".join(pos_examples[:s_num_pos_examples]) + "".join(neg_examples)
             prefixs.append(prefix)
             if task not in prefixs_tasks.keys():
                 prefixs_tasks[task] = prefix
@@ -639,7 +620,7 @@ def main():
         padding ="max_length" if data_args.pad_to_max_length else "longest"
         t_model.eval()
         with torch.no_grad():
-            pooled_sentence_list = []
+            pooled_sentence_list, instruction_input_list = [], []
             g = 256
             for i in range(0, len(prefixs), g):
                 last = i + g if i + g < len(prefixs) else len(prefixs)
@@ -651,24 +632,28 @@ def main():
                     truncation=True,
                     pad_to_multiple_of=8 if training_args.fp16 else None
                 )
-                prefix_inputs = prefix_inputs.to(t_model.device)
-                hidden_states = t_model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
+                prefix_inputs = prefix_inputs.to(model.device)
+                # hidden_states = t_model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
+                hidden_states = model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
                 
                 if pooling == 'first_last_avg':
-                    pooled_sentence = (hidden_states[-1] + hidden_states[1]).mean(dim=1)
+                    pooled_sentence = (hidden_states[-1] + hidden_states[1])
                 elif pooling == 'last_avg':
-                    pooled_sentence = (hidden_states[-1]).mean(dim=1)
+                    pooled_sentence = (hidden_states[-1])
                 elif pooling == 'last2avg':
-                    pooled_sentence = (hidden_states[-1] + hidden_states[-2]).mean(dim=1)
+                    pooled_sentence = (hidden_states[-1] + hidden_states[-2])
                 else:
                     raise Exception("unknown pooling {}".format(pooling))
+                instruction_input_list.append(pooled_sentence)
+                pooled_sentence = pooled_sentence.mean(dim=1)
                 pooled_sentence_list.append(pooled_sentence.float())
-
+                
+            instruction_input = torch.cat(instruction_input_list, 0)
             pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
             if model_args.whitening:
                 kernel, bias = compute_kernel_bias(pooled_sentence, 255)
                 pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
-        return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist()))
+        return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), dict(zip(list(prefixs_tasks.keys()), instruction_input.tolist()))
     
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     pooling = data_args.pooling
@@ -682,7 +667,42 @@ def main():
         load_from_cache_file=not data_args.overwrite_cache,
         desc="Running tokenizer on dataset",
     )
-    task_features = process_prefixs(prefixs_tasks)
+    task_features, instruction_inputs = process_prefixs(prefixs_tasks)
+    
+    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
+    if model_args.load_hypernet_weights is not None:
+        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
+    trainable_params, all_param = get_parameter_number(model)
+    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+
+    if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
+        if isinstance(tokenizer, MBartTokenizer):
+            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[data_args.lang]
+        else:
+            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(data_args.lang)
+
+    if model.config.decoder_start_token_id is None:
+        raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
+
+    if (
+        hasattr(model.config, "max_position_embeddings")
+        and model.config.max_position_embeddings < data_args.max_source_length
+    ):
+        if model_args.resize_position_embeddings is None:
+            logger.warning(
+                f"Increasing the model's number of position embedding vectors from {model.config.max_position_embeddings} "
+                f"to {data_args.max_source_length}."
+            )
+            model.resize_position_embeddings(data_args.max_source_length)
+        elif model_args.resize_position_embeddings:
+            model.resize_position_embeddings(data_args.max_source_length)
+        else:
+            raise ValueError(
+                f"`--max_source_length` is set to {data_args.max_source_length}, but the model only has {model.config.max_position_embeddings}"
+                f" position encodings. Consider either reducing `--max_source_length` to {model.config.max_position_embeddings} or to automatically "
+                "resize the model's position encodings by passing `--resize_position_embeddings`."
+            )
+    
     if training_args.label_smoothing_factor > 0 and not hasattr(model, "prepare_decoder_input_ids_from_labels"):
         logger.warning(
             "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
@@ -727,6 +747,8 @@ def main():
         tk_instruct=data_args.tk_instruct,
         kd=model_args.kd,
         task_features=task_features,
+        instruction_inputs=instruction_inputs,
+        custom_model=model_args.custom_model,
         student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
