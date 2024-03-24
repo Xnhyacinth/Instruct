@@ -27,6 +27,12 @@ if [ "$allenai" == "allenai" ];then
             model=allenai/tk-instruct-3b-def 
         fi
     fi
+    if [ "$model" == "t5-xxl" ];then
+        t_model=allenai/tk-instruct-11b-def-pos
+        if [ "$pos" == "0" ];then
+            t_model=allenai/tk-instruct-11b-def 
+        fi
+    fi
 fi
 out="output/${model}_eval_pos${pos}"
 echo "model: ${model}"
