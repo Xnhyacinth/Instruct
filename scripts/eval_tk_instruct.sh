@@ -16,7 +16,10 @@ m=${3:-"t5-large"}
 batch_size=${4:-"8"}
 pos=${5:-"2"}
 allenai=${6:-"0"}
+kd=${7:-"0"}
+m_path=${8:-"0"}
 model=google/${m}-lm-adapt
+run_file=run_s2s.py
 if [ "$allenai" == "allenai" ];then
     if [ "$m" == "t5-base" ];then
         model=allenai/tk-instruct-base-def-pos
@@ -28,16 +31,23 @@ if [ "$allenai" == "allenai" ];then
         fi
     fi
     if [ "$model" == "t5-xxl" ];then
-        t_model=allenai/tk-instruct-11b-def-pos
+        model=allenai/tk-instruct-11b-def-pos
         if [ "$pos" == "0" ];then
-            t_model=allenai/tk-instruct-11b-def 
+            model=allenai/tk-instruct-11b-def 
         fi
     fi
 fi
 out="output/${model}_eval_pos${pos}"
+extra_args=""
+if [ "$kd" == "kd" ];then
+    run_file=run_s2s_kd.py
+    model=$m_path
+    out="${out}_kd"
+    extra_args="${extra_args} --load_hypernet_weights ${m_path}/hypernet_weights.pt"
+fi
 echo "model: ${model}"
 echo ${out}
-python src/run_s2s.py \
+python src/${run_file} \
     --do_predict \
     --predict_with_generate \
     --evaluation_strategy "no" \

@@ -6,6 +6,7 @@
 ### 
 set -e
 export NCCL_P2P_DISABLE=1
+
 # export CUDA_DEVICE_ORDER="PCI_BUS_ID"
 # export TRANSFORMERS_CACHE=/home/yizhongw/.cache/huggingface
 # export HF_HOME=/mnt/publiccache/huggingface/

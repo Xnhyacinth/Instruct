@@ -423,7 +423,7 @@ class NIKDTrainer(Seq2SeqTrainer):
             generation_inputs = inputs[self.model.model.main_input_name]
 
         generated_tokens = self.model.generate(
-            **{'input_ids':generation_inputs, 'features':inputs['features']},
+            **{'input_ids':generation_inputs, 'features':inputs['features'], 'instruction_input':inputs['instruction_input']},
             **gen_kwargs,
         )
         # in case the batch is shorter than max length, the output should be padded

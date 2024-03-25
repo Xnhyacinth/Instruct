@@ -1625,6 +1625,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             )
         
         if self.custom_model:
+            if self.gen:
+                n = encoder_outputs[0].size(0) // self.instruction_input.size(0)
+                self.instruction_input = self.instruction_input.repeat(1, n, 1).view(encoder_outputs[0].size(0), self.instruction_input.size(1), -1)
             hidden_states = torch.cat((self.instruction_input.to(torch.bfloat16), encoder_outputs[0]), 1)
             attention_mask = torch.cat((torch.ones(self.instruction_input.size(0), self.instruction_input.size(1)).to(attention_mask.device), attention_mask), 1)
         else:

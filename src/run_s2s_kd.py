@@ -847,7 +847,7 @@ def main():
 
     if training_args.do_predict:
         logger.info("*** Predict ***")
-
+        
         predict_results = trainer.predict(
             predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
         )

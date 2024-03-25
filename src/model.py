@@ -412,6 +412,7 @@ class AdapterWrapper(nn.Module):
         down_dim = model.config.d_kv * model.config.num_heads
         input_dim = model.config.d_model
         self.adap_pooler = MyPooler(args.d_model, self.encoding_dim)
+        self.model.gen = False
 
         self.hypernet = HyperNet(
             self.encoding_dim, input_dim, self.embedding_dim, down_dim)
@@ -556,7 +557,7 @@ class AdapterWrapper(nn.Module):
         
         if not self.args.whitening:
             features = self.adap_pooler(features)
-        
+
         if self.args.custom_model:
             self.model.instruction_input = instruction_input
             self.model.custom_model = True
@@ -577,8 +578,6 @@ class AdapterWrapper(nn.Module):
             self.ffn_en_hypernet_wo.up_hypernet.set_features(self.emb(features))
             self.ffn_de_hypernet_wo.down_hypernet.set_features(self.emb(features))
             self.ffn_de_hypernet_wo.up_hypernet.set_features(self.emb(features))
-        
-        # input_ids_embeds = self.model.get_input_embeddings()(input_ids)
         
         outputs = self.model(**inputs)
 
@@ -590,8 +589,9 @@ class AdapterWrapper(nn.Module):
         
         if not self.args.whitening:
             features = self.adap_pooler(features)
-        
+            
         if self.args.custom_model:
+            self.model.gen = True
             self.model.instruction_input = instruction_input
             self.model.custom_model = True
         
@@ -611,6 +611,7 @@ class AdapterWrapper(nn.Module):
             self.ffn_en_hypernet_wo.up_hypernet.set_features(self.emb(features))
             self.ffn_de_hypernet_wo.down_hypernet.set_features(self.emb(features))
             self.ffn_de_hypernet_wo.up_hypernet.set_features(self.emb(features))
+            
         return self.model.generate(**inputs)
 
 
