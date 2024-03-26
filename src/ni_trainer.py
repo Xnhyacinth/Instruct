@@ -203,8 +203,8 @@ class NIKDTrainer(Seq2SeqTrainer):
         Works both with or without labels.
         """
         args = self.args
-        self._max_length = 64
-        self._num_beams = 2
+        self._max_length = 128
+        self._num_beams = 1
         prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
 
         # if eval is called w/o train init deepspeed here
@@ -407,12 +407,18 @@ class NIKDTrainer(Seq2SeqTrainer):
         gen_kwargs = {
             "max_length": self._max_length if self._max_length is not None else self.model.config.max_length,
             "num_beams": self._num_beams if self._num_beams is not None else self.model.config.num_beams,
+            "top_k": 50,
+            "top_p": 0.95,
+            "do_sample": True,
             "synced_gpus": True if is_deepspeed_zero3_enabled() else False,
         }
 
         if "attention_mask" in inputs:
             gen_kwargs["attention_mask"] = inputs.get("attention_mask", None)
-
+        if "instruction_input" in inputs:
+            gen_kwargs["instruction_input"] = inputs.get("instruction_input", None)
+        if "features" in inputs:
+            gen_kwargs["features"] = inputs.get("features", None)
         # prepare generation inputs
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
@@ -423,7 +429,7 @@ class NIKDTrainer(Seq2SeqTrainer):
             generation_inputs = inputs[self.model.model.main_input_name]
 
         generated_tokens = self.model.generate(
-            **{'input_ids':generation_inputs, 'features':inputs['features'], 'instruction_input':inputs['instruction_input']},
+            **{'input_ids':generation_inputs},
             **gen_kwargs,
         )
         # in case the batch is shorter than max length, the output should be padded
