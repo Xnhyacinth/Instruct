@@ -625,7 +625,7 @@ def main():
         t_model.eval()
         with torch.no_grad():
             pooled_sentence_list, instruction_input_list, attention_mask_list = [], [], []
-            g = 256
+            g = 128
             for i in range(0, len(prefixs), g):
                 last = i + g if i + g < len(prefixs) else len(prefixs)
                 prefix_inputs = tokenizer(
@@ -671,7 +671,7 @@ def main():
     raw_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
-        batch_size=1024,
+        batch_size=2048,
         load_from_cache_file=not data_args.overwrite_cache,
         desc="Running tokenizer on dataset",
     )
