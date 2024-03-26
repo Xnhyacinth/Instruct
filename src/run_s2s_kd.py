@@ -625,7 +625,7 @@ def main():
         t_model.eval()
         with torch.no_grad():
             pooled_sentence_list, instruction_input_list, attention_mask_list = [], [], []
-            g = 128
+            g = 32
             for i in range(0, len(prefixs), g):
                 last = i + g if i + g < len(prefixs) else len(prefixs)
                 prefix_inputs = tokenizer(
@@ -633,7 +633,7 @@ def main():
                     max_length=data_args.max_source_length,
                     padding=padding,
                     return_tensors="pt",
-                    truncation=True,
+                    # truncation=True,
                     pad_to_multiple_of=8 if training_args.fp16 else None
                 )
                 attention_mask_list.append(prefix_inputs["attention_mask"])
@@ -653,15 +653,17 @@ def main():
                 instruction_input_list.append(pooled_sentence)
                 pooled_sentence = pooled_sentence.mean(dim=1)
                 pooled_sentence_list.append(pooled_sentence.float())
-                
-            instruction_input = torch.cat(instruction_input_list, 0)
-            attention_mask = torch.cat(attention_mask_list, 0)
+            
             pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
-
             if model_args.whitening:
                 kernel, bias = compute_kernel_bias(pooled_sentence, 255)
                 pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
-        return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), dict(zip(list(prefixs_tasks.keys()), instruction_input.tolist())), dict(zip(list(prefixs_tasks.keys()), attention_mask.tolist()))
+            if model_args.custom_model:
+                instruction_input = torch.cat(instruction_input_list, 0)
+                attention_mask = torch.cat(attention_mask_list, 0)
+                return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), dict(zip(list(prefixs_tasks.keys()), instruction_input.tolist())), dict(zip(list(prefixs_tasks.keys()), attention_mask.tolist()))
+            else:
+                return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), None, None
     
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     pooling = data_args.pooling
