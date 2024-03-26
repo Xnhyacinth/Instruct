@@ -624,18 +624,19 @@ def main():
         padding ="max_length" if data_args.pad_to_max_length else "longest"
         t_model.eval()
         with torch.no_grad():
-            pooled_sentence_list, instruction_input_list = [], []
+            pooled_sentence_list, instruction_input_list, attention_mask_list = [], [], []
             g = 256
             for i in range(0, len(prefixs), g):
                 last = i + g if i + g < len(prefixs) else len(prefixs)
                 prefix_inputs = tokenizer(
                     prefixs[i: last],
-                    max_length=data_args.max_target_length,
+                    max_length=data_args.max_source_length,
                     padding=padding,
                     return_tensors="pt",
                     truncation=True,
                     pad_to_multiple_of=8 if training_args.fp16 else None
                 )
+                attention_mask_list.append(prefix_inputs["attention_mask"])
                 prefix_inputs = prefix_inputs.to(model.device)
                 # hidden_states = t_model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
                 hidden_states = model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
@@ -648,16 +649,19 @@ def main():
                     pooled_sentence = (hidden_states[-1] + hidden_states[-2])
                 else:
                     raise Exception("unknown pooling {}".format(pooling))
+                    
                 instruction_input_list.append(pooled_sentence)
                 pooled_sentence = pooled_sentence.mean(dim=1)
                 pooled_sentence_list.append(pooled_sentence.float())
                 
             instruction_input = torch.cat(instruction_input_list, 0)
+            attention_mask = torch.cat(attention_mask_list, 0)
             pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
+
             if model_args.whitening:
                 kernel, bias = compute_kernel_bias(pooled_sentence, 255)
                 pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
-        return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), dict(zip(list(prefixs_tasks.keys()), instruction_input.tolist()))
+        return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), dict(zip(list(prefixs_tasks.keys()), instruction_input.tolist())), dict(zip(list(prefixs_tasks.keys()), attention_mask.tolist()))
     
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     pooling = data_args.pooling
@@ -667,11 +671,11 @@ def main():
     raw_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
-        batch_size=2048,
+        batch_size=1024,
         load_from_cache_file=not data_args.overwrite_cache,
         desc="Running tokenizer on dataset",
     )
-    task_features, instruction_inputs = process_prefixs(prefixs_tasks)
+    task_features, instruction_inputs, attention_masks = process_prefixs(prefixs_tasks)
     
     model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     if model_args.load_hypernet_weights is not None:
@@ -752,6 +756,7 @@ def main():
         kd=model_args.kd,
         task_features=task_features,
         instruction_inputs=instruction_inputs,
+        attention_masks=attention_masks,
         custom_model=model_args.custom_model,
         student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples
     )

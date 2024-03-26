@@ -417,6 +417,8 @@ class NIKDTrainer(Seq2SeqTrainer):
             gen_kwargs["attention_mask"] = inputs.get("attention_mask", None)
         if "instruction_input" in inputs:
             gen_kwargs["instruction_input"] = inputs.get("instruction_input", None)
+        if "instruction_attention_mask" in inputs:
+            gen_kwargs["instruction_attention_mask"] = inputs.get("instruction_attention_mask", None)
         if "features" in inputs:
             gen_kwargs["features"] = inputs.get("features", None)
         # prepare generation inputs

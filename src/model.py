@@ -544,7 +544,7 @@ class AdapterWrapper(nn.Module):
             feature = torch.Tensor(l)
         return feature
 
-    def forward(self, labels, input_ids, attention_mask, features, instruction_input=None, original_mask=None, original_embedding=None, include_original=False, **kwargs):
+    def forward(self, labels, input_ids, attention_mask, features, instruction_input=None, instruction_attention_mask=None, original_mask=None, original_embedding=None, include_original=False, **kwargs):
         """
         forward model needs to include features parameter for Trainer to not discard this feature
         """
@@ -559,6 +559,7 @@ class AdapterWrapper(nn.Module):
 
         if self.args.custom_model:
             self.model.instruction_input = instruction_input
+            self.model.instruction_attention_mask = instruction_attention_mask
             self.model.custom_model = True
         
         self.hypernet.down_hypernet.set_features(self.emb(features))
@@ -582,7 +583,7 @@ class AdapterWrapper(nn.Module):
 
         return outputs
 
-    def generate(self, input_ids, attention_mask, features=None, instruction_input=None, **kwargs):
+    def generate(self, input_ids, attention_mask, features=None, instruction_input=None, instruction_attention_mask=None, **kwargs):
         inputs = {"input_ids": input_ids,
                   "attention_mask": attention_mask, **kwargs}
         
@@ -591,6 +592,7 @@ class AdapterWrapper(nn.Module):
             
         if self.args.custom_model:
             self.model.instruction_input = instruction_input
+            self.model.instruction_attention_mask = instruction_attention_mask
             self.model.custom_model = True
         
         self.hypernet.down_hypernet.set_features(self.emb(features))

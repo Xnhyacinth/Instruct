@@ -28,6 +28,7 @@ class DataCollatorForNI:
     kd: bool = False
     task_features: dict = None
     instruction_inputs: dict = None
+    attention_masks: dict = None
     custom_model: bool = False
     student_input: bool = False
     
@@ -143,7 +144,7 @@ class DataCollatorForNI:
                     sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
 
         else:
-            sources, prefixs, instances, s_sources, instruction_inputs = [], [], [], [], []
+            sources, prefixs, instances, s_sources, instruction_inputs, attention_masks = [], [], [], [], [], []
             for instance in batch:
                 sources.append(instance["source"])     
                 prefixs.append(self.task_features[instance['Task']])
@@ -152,6 +153,7 @@ class DataCollatorForNI:
                 if self.custom_model:
                     instances.append(instance["instance"])
                     instruction_inputs.append(self.instruction_inputs[instance['Task']])
+                    attention_masks.append(self.attention_masks[instance['Task']])
         if self.text_only:
             t_model_inputs = {"inputs": sources}
         else:
@@ -207,6 +209,7 @@ class DataCollatorForNI:
                 if "decoder_input_ids" in t_model_inputs.keys():
                     model_inputs["decoder_input_ids"] = decoder_input_ids
                 model_inputs["instruction_input"] = torch.Tensor(instruction_inputs)
+                model_inputs["instruction_attention_mask"] = torch.Tensor(attention_masks)
             elif self.student_input:
                 if self.text_only:
                     model_inputs = {"inputs": s_sources}

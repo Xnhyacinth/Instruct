@@ -1623,13 +1623,32 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
                 hidden_states=encoder_outputs[1] if len(encoder_outputs) > 1 else None,
                 attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
             )
-        
+
         if self.custom_model:
             if encoder_outputs[0].size(0) != self.instruction_input.size(0):
                 n = encoder_outputs[0].size(0) // self.instruction_input.size(0)
-                self.instruction_input = self.instruction_input.repeat(1, n, 1).view(encoder_outputs[0].size(0), self.instruction_input.size(1), -1)
-            hidden_states = torch.cat((self.instruction_input.to(torch.bfloat16), encoder_outputs[0]), 1)
-            attention_mask = torch.cat((torch.ones(self.instruction_input.size(0), self.instruction_input.size(1)).to(attention_mask.device), attention_mask), 1)
+                self.instruction_input = self.instruction_input.repeat(1, n, 1).view(encoder_outputs[0].size(0), self.instruction_input.size(1), -1).to(encoder_outputs[0].dtype)
+                self.instruction_attention_mask = self.instruction_attention_mask.repeat(1, n).view(encoder_outputs[0].size(0), -1).to(attention_mask.dtype)
+            hidden_states_list = []
+            lengths = torch.sum(self.instruction_attention_mask, dim=-1)
+            lengths_encoder = torch.sum(attention_mask, dim=-1)
+            max_length = 0
+            for i, (instruction_input, encoder_output) in enumerate(zip(self.instruction_input, encoder_outputs[0])):
+                max_length = max(max_length, int(lengths[i] + lengths_encoder[i]))
+                hidden_states_list.append(torch.cat((instruction_input[:int(lengths[i]), :], encoder_output[:int(lengths_encoder[i]), :])))
+            attention_mask_list = []
+            
+            for i, hidden_states in enumerate(hidden_states_list):
+                padding_tensor = torch.zeros((max_length - int(hidden_states.size(0)), int(hidden_states.size(1))), dtype=encoder_outputs[0].dtype).to(encoder_outputs[0].device)
+                hidden_states_list[i] = torch.cat((hidden_states, padding_tensor), dim=0).unsqueeze(0)
+                attention_mask_list.append(torch.Tensor([1] * hidden_states.size(0) + [0] * (max_length - hidden_states.size(0))).unsqueeze(0).to(attention_mask.dtype))
+
+            hidden_states = torch.cat(hidden_states_list, 0).to(encoder_outputs[0].dtype)
+            attention_mask = torch.cat(attention_mask_list, 0).to(encoder_outputs[0].device)
+
+            # hidden_states = torch.cat((self.instruction_input.to(torch.bfloat16), encoder_outputs[0]), 1)
+            # # attention_mask = torch.cat((torch.ones(self.instruction_input.size(0), self.instruction_input.size(1)).to(attention_mask.device), attention_mask), 1)
+            # attention_mask = torch.cat((self.instruction_attention_mask.to(torch.bfloat16), attention_mask), 1)
         else:
             hidden_states = encoder_outputs[0]
 
