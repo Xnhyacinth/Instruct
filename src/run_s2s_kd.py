@@ -625,7 +625,7 @@ def main():
         t_model.eval()
         with torch.no_grad():
             pooled_sentence_list, instruction_input_list, attention_mask_list = [], [], []
-            g = 32
+            g = 16
             for i in range(0, len(prefixs), g):
                 last = i + g if i + g < len(prefixs) else len(prefixs)
                 prefix_inputs = tokenizer(
@@ -678,12 +678,6 @@ def main():
         desc="Running tokenizer on dataset",
     )
     task_features, instruction_inputs, attention_masks = process_prefixs(prefixs_tasks)
-    
-    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
-    if model_args.load_hypernet_weights is not None:
-        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
-    trainable_params, all_param = get_parameter_number(model)
-    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
 
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
@@ -759,7 +753,7 @@ def main():
         task_features=task_features,
         instruction_inputs=instruction_inputs,
         attention_masks=attention_masks,
-        custom_model=model_args.custom_model,
+        args=model_args,
         student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
@@ -767,7 +761,6 @@ def main():
     training_args.remove_unused_columns = False 
 
     # Metric
-
     def compute_ni_metrics(dataset, preds, save_prefix=None):
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         references = [e["Instance"]["output"] for e in dataset]
@@ -790,6 +783,12 @@ def main():
                         "Prediction": pred
                     }) + "\n")
         return result
+    
+    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
+    if model_args.load_hypernet_weights is not None:
+        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
+    trainable_params, all_param = get_parameter_number(model)
+    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     
     # Initialize our Trainer
     trainer = NIKDTrainer(

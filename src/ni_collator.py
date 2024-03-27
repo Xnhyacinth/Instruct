@@ -29,7 +29,7 @@ class DataCollatorForNI:
     task_features: dict = None
     instruction_inputs: dict = None
     attention_masks: dict = None
-    custom_model: bool = False
+    args: dict = None
     student_input: bool = False
     
 
@@ -38,8 +38,10 @@ class DataCollatorForNI:
         if return_tensors is None:
             return_tensors = self.return_tensors
 
-        if not self.kd:
+        if not self.args.whitening:
             sources = []
+            if self.kd:
+                prefixs, instances, s_sources = [], [], []
             for instance in batch:
                 if self.tk_instruct:
                     all_valid_encodings = [
@@ -143,6 +145,24 @@ class DataCollatorForNI:
                 else:
                     sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
 
+                if self.student_input:
+                    # s_source
+                    s_source = task_name + definition + "".join(pos_examples[:self.args.s_num_pos_examples]) + task_input
+                    tokenized_s_source = self.tokenizer(s_source)["input_ids"]
+                    if len(tokenized_s_source) <= self.max_source_length:
+                        s_sources.append(s_source)
+                    else:
+                        s_sources.append(self.tokenizer.decode(tokenized_s_source[:self.max_source_length], skip_special_tokens=True))
+                
+                if self.kd:
+                    # prefix
+                    prefix = task_name + definition + "".join(pos_examples[:self.args.s_num_pos_examples]) + "".join(neg_examples)
+                    prefixs.append(prefix)
+                    
+                if self.args.custom_model:
+                    # instance
+                    instances.append(task_input)
+                
         else:
             sources, prefixs, instances, s_sources, instruction_inputs, attention_masks = [], [], [], [], [], []
             for instance in batch:
@@ -150,7 +170,7 @@ class DataCollatorForNI:
                 prefixs.append(self.task_features[instance['Task']])
                 if self.student_input:
                     s_sources.append(instance["s_source"])
-                if self.custom_model:
+                if self.args.custom_model:
                     instances.append(instance["instance"])
                     instruction_inputs.append(self.instruction_inputs[instance['Task']])
                     attention_masks.append(self.attention_masks[instance['Task']])
@@ -192,7 +212,7 @@ class DataCollatorForNI:
         if not self.kd:
             return t_model_inputs
         else:
-            if self.custom_model:
+            if self.args.custom_model:
                 if self.text_only:
                     model_inputs = {"inputs": instances}
                 else:
