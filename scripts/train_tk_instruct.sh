@@ -131,7 +131,7 @@ if [ "$tune" == "kd" ];then
         extra_args="${extra_args} --custom_model True"
     fi
 fi
-if [ "$do_sample" != "do_sample" ];then
+if [ "$do_sample" == "do_sample" ];then
     name="${name}_do_sample"
     output_dir="${output_dir}_do_sample"
     extra_args="${extra_args} --do_sample True"
