@@ -35,6 +35,7 @@ whitening=${15:-"0"}
 pos=${16:-"2"}
 s_pos=${17:-"10"}
 custom=${18:-"0"}
+do_sample=${19:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}-${model}_lr${lr}_warm${warmup_ratio}
@@ -129,6 +130,11 @@ if [ "$tune" == "kd" ];then
         output_dir="${output_dir}_custom"
         extra_args="${extra_args} --custom_model True"
     fi
+fi
+if [ "$do_sample" != "do_sample" ];then
+    name="${name}_do_sample"
+    output_dir="${output_dir}_do_sample"
+    extra_args="${extra_args} --do_sample True"
 fi
 echo name: ${name}
 echo run_file: ${run_file}

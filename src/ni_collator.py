@@ -164,10 +164,10 @@ class DataCollatorForNI:
                     instances.append(task_input)
                 
         else:
-            sources, prefixs, instances, s_sources, instruction_inputs, attention_masks = [], [], [], [], [], []
+            sources, features, instances, s_sources, instruction_inputs, attention_masks = [], [], [], [], [], []
             for instance in batch:
                 sources.append(instance["source"])     
-                prefixs.append(self.task_features[instance['Task']])
+                features.append(self.task_features[instance['Task']])
                 if self.student_input:
                     s_sources.append(instance["s_source"])
                 if self.args.custom_model:
@@ -212,6 +212,33 @@ class DataCollatorForNI:
         if not self.kd:
             return t_model_inputs
         else:
+            if not self.args.whitening:
+                with self.tokenizer.as_target_tokenizer():
+                    prefixs_inputs = self.tokenizer(
+                        prefixs,
+                        max_length=self.max_source_length,
+                        padding=self.padding,
+                        return_tensors=self.return_tensors,
+                        truncation=True,
+                        pad_to_multiple_of=self.pad_to_multiple_of
+                    )
+                    prefixs_inputs = prefixs_inputs.to(self.model.device)
+                    hidden_states = self.model.encoder(**prefixs_inputs, return_dict=True, output_hidden_states=True).hidden_states
+                    
+                    if self.args.pooling == 'first_last_avg':
+                        pooled_sentence = (hidden_states[-1] + hidden_states[1])
+                    elif self.args.pooling == 'last_avg':
+                        pooled_sentence = (hidden_states[-1])
+                    elif self.args.pooling == 'last2avg':
+                        pooled_sentence = (hidden_states[-1] + hidden_states[-2])
+                    else:
+                        raise Exception("unknown pooling {}".format(self.args.pooling))
+                    
+                    if self.args.custom_model:
+                        instruction_inputs = hidden_states[-1].cpu()
+                        attention_masks = prefixs_inputs['attention_mask'].cpu()
+                    features = pooled_sentence.mean(dim=1).cpu()
+            
             if self.args.custom_model:
                 if self.text_only:
                     model_inputs = {"inputs": instances}
@@ -247,5 +274,6 @@ class DataCollatorForNI:
                     model_inputs["decoder_input_ids"] = decoder_input_ids
             else:
                 model_inputs = t_model_inputs.copy()
-            model_inputs["features"] = torch.Tensor(prefixs)
+            
+            model_inputs["features"] = torch.Tensor(features)
             return t_model_inputs, model_inputs

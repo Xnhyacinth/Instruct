@@ -197,6 +197,15 @@ class ModelArguments:
             "help": "Whether to use concat for input."
         },
     )
+    do_sample: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to do_sample."
+        },
+    )
+    pooling: Optional[str] = field(
+        default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
+    )
 
 
 @dataclass
@@ -319,9 +328,6 @@ class DataTrainingArguments:
     tk_instruct: Optional[bool] = field(
         default=False,
         metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."} 
-    )
-    pooling: Optional[str] = field(
-        default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
     )
     
     def __post_init__(self):
@@ -666,18 +672,19 @@ def main():
                 return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), None, None
     
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
-    pooling = data_args.pooling
-    prefixs_tasks = {}
-    # raw_datasets['train'] = raw_datasets['train'].select(range(200))
-    # raw_datasets['test'] = raw_datasets['test'].select(range(10))
-    raw_datasets = raw_datasets.map(
-        preprocess_function,
-        batched=True,
-        batch_size=2048,
-        load_from_cache_file=not data_args.overwrite_cache,
-        desc="Running tokenizer on dataset",
-    )
-    task_features, instruction_inputs, attention_masks = process_prefixs(prefixs_tasks)
+    if model_args.whitening:
+        pooling = model_args.pooling
+        prefixs_tasks = {}
+        # raw_datasets['train'] = raw_datasets['train'].select(range(200))
+        # raw_datasets['test'] = raw_datasets['test'].select(range(10))
+        raw_datasets = raw_datasets.map(
+            preprocess_function,
+            batched=True,
+            batch_size=2048,
+            load_from_cache_file=not data_args.overwrite_cache,
+            desc="Running tokenizer on dataset",
+        )
+        task_features, instruction_inputs, attention_masks = process_prefixs(prefixs_tasks)
 
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
@@ -735,9 +742,10 @@ def main():
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
 
     # Data collator
+    model_args.s_num_pos_examples = data_args.s_num_pos_examples
     data_collator = DataCollatorForNI(
         tokenizer,
-        model=model,
+        model=t_model,
         padding="max_length" if data_args.pad_to_max_length else "longest",
         max_source_length=data_args.max_source_length,
         max_target_length=data_args.max_target_length,
@@ -750,9 +758,9 @@ def main():
         add_explanation=data_args.add_explanation,
         tk_instruct=data_args.tk_instruct,
         kd=model_args.kd,
-        task_features=task_features,
-        instruction_inputs=instruction_inputs,
-        attention_masks=attention_masks,
+        task_features=task_features if model_args.whitening else None,
+        instruction_inputs=instruction_inputs if model_args.whitening else None,
+        attention_masks=attention_masks if model_args.whitening else None,
         args=model_args,
         student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples
     )
