@@ -436,12 +436,12 @@ def main():
         model_cls = T5ForConditionalGeneration
         config_cls = T5Config
     else:
-        # model_cls = AutoModelForSeq2SeqLM
-        # config_cls = AutoConfig
-        from modeling_t5 import T5ForConditionalGeneration
-        from configuration_t5 import T5Config
-        model_cls = T5ForConditionalGeneration
-        config_cls = T5Config
+        model_cls = AutoModelForSeq2SeqLM
+        config_cls = AutoConfig
+        # from modeling_t5 import T5ForConditionalGeneration
+        # from configuration_t5 import T5Config
+        # model_cls = T5ForConditionalGeneration
+        # config_cls = T5Config
     config = config_cls.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         # cache_dir=model_args.cache_dir,
