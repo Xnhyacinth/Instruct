@@ -621,7 +621,7 @@ def main():
     def process_prefixs(prefixs_tasks):
         prefixs = list(prefixs_tasks.values())
         print(len(prefixs))
-        padding ="max_length" if data_args.pad_to_max_length else "longest"
+        padding = "max_length" if data_args.pad_to_max_length else "longest"
         t_model.eval()
         with torch.no_grad():
             pooled_sentence_list, instruction_input_list, attention_mask_list = [], [], []
@@ -633,7 +633,7 @@ def main():
                     max_length=data_args.max_source_length,
                     padding=padding,
                     return_tensors="pt",
-                    # truncation=True,
+                    truncation=True,
                     pad_to_multiple_of=8 if training_args.fp16 else None
                 )
                 attention_mask_list.append(prefix_inputs["attention_mask"])
