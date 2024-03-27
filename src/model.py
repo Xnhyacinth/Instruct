@@ -558,10 +558,8 @@ class AdapterWrapper(nn.Module):
         if not self.args.whitening:
             features = self.adap_pooler(features)
 
-        if self.args.custom_model:
-            self.model.instruction_input = instruction_input
-            self.model.instruction_attention_mask = instruction_attention_mask
-            self.model.custom_model = True
+        self.model.instruction_input = instruction_input
+        self.model.instruction_attention_mask = instruction_attention_mask
         
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
@@ -591,10 +589,8 @@ class AdapterWrapper(nn.Module):
         if not self.args.whitening:
             features = self.adap_pooler(features)
             
-        if self.args.custom_model:
-            self.model.instruction_input = instruction_input
-            self.model.instruction_attention_mask = instruction_attention_mask
-            self.model.custom_model = True
+        self.model.instruction_input = instruction_input
+        self.model.instruction_attention_mask = instruction_attention_mask
         
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
