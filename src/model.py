@@ -412,6 +412,7 @@ class AdapterWrapper(nn.Module):
         down_dim = model.config.d_kv * model.config.num_heads
         input_dim = model.config.d_model
         self.adap_pooler = MyPooler(args.d_model, self.encoding_dim)
+        self.model.custom_model = args.custom_model
 
         self.hypernet = HyperNet(
             self.encoding_dim, input_dim, self.embedding_dim, down_dim)
