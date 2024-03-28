@@ -161,7 +161,7 @@ class DataCollatorForNI:
                     
                 if self.args.custom_model:
                     # instance
-                    instances.append(task_input)
+                    instances.append(definition + task_input)
                 
         else:
             sources, features, instances, s_sources, instruction_inputs, attention_masks = [], [], [], [], [], []
