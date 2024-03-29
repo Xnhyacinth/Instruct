@@ -125,12 +125,6 @@ class ModelArguments:
             "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
         },
         )
-    encoding_dim: Optional[int] = field(
-        default=255,
-        metadata={
-            "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
-        },
-        )
     temperature: Optional[float] = field(
         default=1.0,
         metadata={

@@ -406,7 +406,7 @@ class AdapterWrapper(nn.Module):
         self.down_hypernet = None
         self.up_hypernet = None
         self.embedding_dim = embedding_dim
-        self.encoding_dim = 255
+        self.encoding_dim = args.encoding_dim
         self.args = args
         self.config = model.config
         down_dim = model.config.d_kv * model.config.num_heads
@@ -470,7 +470,7 @@ class AdapterWrapper(nn.Module):
                     param.requires_grad = False  # Actual freezing operation
         for layer in self.model.modules():
             for x, param in layer.named_parameters():
-                if "norm" in x or "emb" in x or "hypernet" in x:
+                if "norm" in x or "emb" in x or "hypernet" in x or "pooler" in x:
                     param.requires_grad = True
         if 'ffn' in self.args.name:
             for layer in self.model.modules():
