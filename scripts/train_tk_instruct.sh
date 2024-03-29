@@ -38,8 +38,8 @@ custom=${18:-"0"}
 do_sample=${19:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
-name=experiment_pos${pos}-${model}_lr${lr}_warm${warmup_ratio}
-output_dir=output_pos${pos}/${model}_lr${lr}_warm${warmup_ratio}
+name=experiment_pos_pooler${pos}-${model}_lr${lr}_warm${warmup_ratio}
+output_dir=output_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}
 extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 run_file=run_s2s.py
