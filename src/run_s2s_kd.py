@@ -694,8 +694,8 @@ def main():
                 return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), None, None
     
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
-    raw_datasets['train'] = raw_datasets['train'].select(range(200))
-    raw_datasets['test'] = raw_datasets['test'].select(range(10))
+    # raw_datasets['train'] = raw_datasets['train'].select(range(200))
+    # raw_datasets['test'] = raw_datasets['test'].select(range(10))
     if model_args.whitening:
         pooling = model_args.pooling
         prefixs_tasks = {}
