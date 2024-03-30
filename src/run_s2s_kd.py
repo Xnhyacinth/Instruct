@@ -53,10 +53,12 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
-from model import T5LoraWrapper
+from model import T5LoraWrapper, LoRAT5
 from ni_collator import DataCollatorForNI
 from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
 from compute_metrics import compute_metrics, compute_grouped_metrics
+
+
 
 set_progress_bar_enabled(False)
 logger = logging.getLogger(__name__)
@@ -461,14 +463,14 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    model = model_cls.from_pretrained(
+    model_cls = model_cls.from_pretrained(
         model_args.model_name_or_path,
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
         # cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-    ).cuda()
+    )
     
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
@@ -488,6 +490,20 @@ def main():
             for _, param in layer.named_parameters():
                 param.requires_grad = False
         model_args.d_model = t_model.config.d_model
+    hypernet_config = {
+        "pooler_d_model": t_model.config.d_model,
+        "embedding_dim": model_args.r,
+        "encoding_dim": model_args.encoding_dim,
+        "custom_model": model_args.custom_model,
+        "name": model_args.name,
+        "whitening": model_args.whitening,
+    }
+    model_cls.config.update(hypernet_config)
+    model = LoRAT5(model_cls.config)
+    model.load_t5(model_cls.state_dict())
+    trainable_params, all_param = get_parameter_number(model)
+    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+    
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
 
@@ -678,11 +694,12 @@ def main():
                 return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), None, None
     
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
+    raw_datasets['train'] = raw_datasets['train'].select(range(200))
+    raw_datasets['test'] = raw_datasets['test'].select(range(10))
     if model_args.whitening:
         pooling = model_args.pooling
         prefixs_tasks = {}
-        # raw_datasets['train'] = raw_datasets['train'].select(range(200))
-        # raw_datasets['test'] = raw_datasets['test'].select(range(10))
+        
         raw_datasets = raw_datasets.map(
             preprocess_function,
             batched=True,
@@ -798,11 +815,11 @@ def main():
                     }) + "\n")
         return result
     
-    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
-    if model_args.load_hypernet_weights is not None:
-        model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
-    trainable_params, all_param = get_parameter_number(model)
-    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+    # model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
+    # if model_args.load_hypernet_weights is not None:
+    #     model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
+    # trainable_params, all_param = get_parameter_number(model)
+    # logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     
     # Initialize our Trainer
     trainer = NIKDTrainer(
@@ -828,12 +845,13 @@ def main():
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
-
-        save_state = {}
-        for param_tensor in model.state_dict():
-            if 'hypernet' in param_tensor:
-                save_state.update({param_tensor:model.state_dict()[param_tensor]})
-        torch.save(save_state, f'{training_args.output_dir}/hypernet_weights.pt')
+        model.config.save_pretrained(training_args.output_dir)
+        
+        # save_state = {}
+        # for param_tensor in model.state_dict():
+        #     if 'hypernet' in param_tensor:
+        #         save_state.update({param_tensor:model.state_dict()[param_tensor]})
+        # torch.save(save_state, f'{training_args.output_dir}/hypernet_weights.pt')
 
         # torch.save(trainer.model.hypernet.state_dict(), model_args.save_adapter_path)
         

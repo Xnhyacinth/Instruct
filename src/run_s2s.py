@@ -112,6 +112,22 @@ class ModelArguments:
             "the model's position embeddings."
         },
     )
+    whitening: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
+            "with private models)."
+        },
+    )
+    custom_model: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use concat for input."
+        },
+    )
+    pooling: Optional[str] = field(
+        default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
+    )
 
 
 @dataclass
@@ -417,7 +433,8 @@ def main():
             "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
             f"`{model.__class__.__name__}`. This will lead to loss being calculated twice and will take up more memory"
         )
-
+    raw_datasets['train'] = raw_datasets['train'].select(range(200))
+    raw_datasets['test'] = raw_datasets['test'].select(range(10))
     if training_args.do_train:
         if "train" not in raw_datasets:
             raise ValueError("--do_train requires a train dataset")
@@ -454,7 +471,8 @@ def main():
         num_pos_examples=data_args.num_pos_examples,
         num_neg_examples=data_args.num_neg_examples,
         add_explanation=data_args.add_explanation,
-        tk_instruct=data_args.tk_instruct
+        tk_instruct=data_args.tk_instruct,
+        args=model_args
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
     # and some of the information will aslo be used in evaluation.

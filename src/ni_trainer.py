@@ -431,11 +431,11 @@ class NIKDTrainer(Seq2SeqTrainer):
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
 
-        if hasattr(self.model.model, "encoder") and self.model.model.encoder.main_input_name != self.model.model.main_input_name:
-            generation_inputs = inputs[self.model.model.encoder.main_input_name]
+        if hasattr(self.model, "encoder") and self.model.encoder.main_input_name != self.model.main_input_name:
+            generation_inputs = inputs[self.model.encoder.main_input_name]
         else:
-            generation_inputs = inputs[self.model.model.main_input_name]
-
+            generation_inputs = inputs[self.model.main_input_name]
+        self.model.gen = True
         generated_tokens = self.model.generate(
             **{'input_ids':generation_inputs},
             **gen_kwargs,
@@ -700,7 +700,7 @@ class NITrainer(Seq2SeqTrainer):
         # XXX: adapt synced_gpus for fairscale as well
         gen_kwargs = {
             "max_length": self._max_length if self._max_length is not None else self.model.config.max_length,
-            "num_beams": self._num_beams if self._num_beams is not None else self.model.config.num_beams,
+            # "num_beams": self._num_beams if self._num_beams is not None else self.model.config.num_beams,
             "synced_gpus": True if is_deepspeed_zero3_enabled() else False,
         }
 

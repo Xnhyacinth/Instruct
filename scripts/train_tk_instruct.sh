@@ -107,7 +107,7 @@ if [ "$tune" == "kd" ];then
         output_dir="${output_dir}_ffn"
         lora="${lora}_ffn"
     fi
-    extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --kd True"
+    extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --kd True --s_num_pos_examples ${s_pos}"
     if [ "$prompt" == "fullprompt" ];then
         name="${name}_${prompt}"
         output_dir="${output_dir}_${prompt}"
@@ -151,7 +151,6 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --add_task_name False \
     --add_task_definition True \
     --num_pos_examples ${pos} \
-    --s_num_pos_examples ${s_pos} \
     --num_neg_examples 0 \
     --add_explanation False \
     --tk_instruct False \
@@ -164,7 +163,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --per_device_train_batch_size ${bs} \
     --per_device_eval_batch_size ${bs} \
     --gradient_accumulation_steps 2 \
-    --pad_to_max_length True \
+    --pad_to_max_length False \
     --learning_rate ${lr} \
     --num_train_epochs ${epoch} \
     --lr_scheduler_type constant \
