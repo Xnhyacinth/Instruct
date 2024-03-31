@@ -518,9 +518,7 @@ def main():
             model.load_t5(model_cls.state_dict())
             trainable_params, all_param = get_parameter_number(model)
             logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
-            import pdb
-            pdb.set_trace()
-    
+
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
 
