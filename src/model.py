@@ -297,6 +297,7 @@ class HyperParamNet(nn.Module):
         self.linear2 = linear2
         self.dim = dim  # Output dimension
         self.bottleneck = bottleneck  # MLP bottleneck
+        self.features = None
         if scale:
             self.scale = math.sqrt(dim)
         else:
@@ -345,11 +346,7 @@ class HyperLora(nn.Module):
         #     1, x.shape[0] // weight2.shape[0], 1).view(-1, weight2.shape[1], weight2.shape[2])
         # Apply lora
         out = self.dropout(self.linear(x))
-        try:
-            out = torch.matmul(torch.matmul(x, weight1), weight2) + out
-        except:
-            import pdb
-            pdb.set_trace()
+        out = torch.matmul(torch.matmul(x, weight1), weight2) + out
         return out
 
 

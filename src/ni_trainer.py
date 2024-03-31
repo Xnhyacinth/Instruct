@@ -160,7 +160,7 @@ class NIKDTrainer(Seq2SeqTrainer):
             output_attentions = True
         with torch.no_grad():
             t_outputs = self.t_model(**inputs[0], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
-        t_loss = t_outputs.get("loss")
+        # t_loss = t_outputs.get("loss")
         t_logits = t_outputs.get("logits")
         
         # prefix_encodings = self.get_features(inputs[1])
@@ -436,6 +436,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         else:
             generation_inputs = inputs[self.model.main_input_name]
         self.model.gen = True
+
         generated_tokens = self.model.generate(
             **{'input_ids':generation_inputs},
             **gen_kwargs,

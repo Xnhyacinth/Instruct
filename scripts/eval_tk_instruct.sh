@@ -1,4 +1,4 @@
-set -x
+set -e
 ###
  # Copyright (c) 2024 by Huanxuan Liao, huanxuanliao@gmail.com, All Rights Reserved. 
  # @Author: Xnhyacinth, Xnhyacinth@qq.com
@@ -40,14 +40,38 @@ fi
 out="output/${model}_eval_pos${pos}"
 extra_args=""
 if [ "$kd" == "kd" ];then
+    t_model=output/${model}_lr5e-5
+    if [ "$allenai" == "allenai" ];then
+        if [ "$m" == "t5-base" ];then
+            t_model=allenai/tk-instruct-base-def-pos
+            if [ "$pos" == "0" ];then
+                t_model=output_pos0/t5-base_lr1e-4_warm0.05
+            fi
+        fi
+        if [ "$m" == "t5-xl" ];then
+            t_model=allenai/tk-instruct-3b-def-pos
+            if [ "$pos" == "0" ];then
+                t_model=allenai/tk-instruct-3b-def 
+            fi
+        fi
+        if [ "$m" == "t5-xxl" ];then
+            t_model=allenai/tk-instruct-11b-def-pos
+            if [ "$pos" == "0" ];then
+                t_model=allenai/tk-instruct-11b-def 
+            fi
+        fi
+    fi
     run_file=run_s2s_kd.py
     model=$m_path
-    out="${out}_kd"
-    extra_args="${extra_args} --load_hypernet_weights ${m_path}/hypernet_weights.pt"
+    out="output/${m_path}_eval_pos${pos}"
+    extra_args="${extra_args} --kd True --t_model ${t_model}"
 fi
 echo "model: ${model}"
+echo "t_model: ${t_model}"
 echo ${out}
-python src/${run_file} \
+port=$(shuf -i25000-30000 -n1)
+# deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
+CUDA_VISIBLE_DEVICES=${gpus} python src/${run_file} \
     --do_predict \
     --predict_with_generate \
     --evaluation_strategy "no" \
@@ -69,4 +93,5 @@ python src/${run_file} \
     --overwrite_output_dir \
     --cache_dir ./cache/ \
     --overwrite_cache \
-    --per_device_eval_batch_size ${batch_size}
+    --per_device_eval_batch_size ${batch_size} \
+    ${extra_args}

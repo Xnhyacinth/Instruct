@@ -87,6 +87,7 @@ class ModelArguments:
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     t_model: str = field(
+        default=None,
         metadata={"help": "Path to teacher model or model identifier from huggingface.co/models"}
     )
     config_name: Optional[str] = field(
@@ -463,14 +464,27 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    model_cls = model_cls.from_pretrained(
-        model_args.model_name_or_path,
-        from_tf=bool(".ckpt" in model_args.model_name_or_path),
-        config=config,
-        # cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
+    if training_args.do_predict and not training_args.do_train:
+        model_cls = LoRAT5
+        model = model_cls.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            device_map='auto',
+            torch_dtype=torch.bfloat16,
+            config=config,
+            # cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
+    else:
+        model_cls = model_cls.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            # cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
     
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
@@ -489,20 +503,23 @@ def main():
         for layer in t_model.modules():
             for _, param in layer.named_parameters():
                 param.requires_grad = False
-        model_args.d_model = t_model.config.d_model
-    hypernet_config = {
-        "pooler_d_model": t_model.config.d_model,
-        "embedding_dim": model_args.r,
-        "encoding_dim": model_args.encoding_dim,
-        "custom_model": model_args.custom_model,
-        "name": model_args.name,
-        "whitening": model_args.whitening,
-    }
-    model_cls.config.update(hypernet_config)
-    model = LoRAT5(model_cls.config)
-    model.load_t5(model_cls.state_dict())
-    trainable_params, all_param = get_parameter_number(model)
-    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+        if training_args.do_train:
+            model_args.d_model = t_model.config.d_model
+            hypernet_config = {
+                "pooler_d_model": t_model.config.d_model,
+                "embedding_dim": model_args.r,
+                "encoding_dim": model_args.encoding_dim,
+                "custom_model": model_args.custom_model,
+                "name": model_args.name,
+                "whitening": model_args.whitening,
+            }
+            model_cls.config.update(hypernet_config)
+            model = LoRAT5(model_cls.config)
+            model.load_t5(model_cls.state_dict())
+            trainable_params, all_param = get_parameter_number(model)
+            logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+            import pdb
+            pdb.set_trace()
     
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
@@ -785,7 +802,7 @@ def main():
         instruction_inputs=instruction_inputs if model_args.whitening else None,
         attention_masks=attention_masks if model_args.whitening else None,
         args=model_args,
-        student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples
+        student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples if training_args.do_train else False,
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
     # and some of the information will aslo be used in evaluation.

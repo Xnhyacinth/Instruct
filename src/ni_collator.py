@@ -113,6 +113,12 @@ class DataCollatorForNI:
                     if len(self.tokenizer(definition + " ".join(pos_examples) + pos_example_str + task_input)["input_ids"]) <= self.max_source_length:
                         pos_examples.append(pos_example_str)
                     else:
+                        d = self.max_source_length - len(self.tokenizer(definition + " ".join(pos_examples) + task_input)["input_ids"])
+                        tokenized_pos_example_str = self.tokenizer(pos_example_str)["input_ids"]
+                        pos_examples.append(
+                            self.tokenizer.decode(tokenized_pos_example_str[:d // 2], skip_special_tokens=True) + 
+                            self.tokenizer.decode(tokenized_pos_example_str[-d // 2:], skip_special_tokens=True)
+                            )
                         break
                 
                 # try to add negative examples.
@@ -137,7 +143,7 @@ class DataCollatorForNI:
                         neg_examples.append(neg_example_str)
                     else:
                         break 
-                
+
                 source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
                 tokenized_source = self.tokenizer(source)["input_ids"]
                 if len(tokenized_source) <= self.max_source_length:
