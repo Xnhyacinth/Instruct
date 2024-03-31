@@ -674,6 +674,11 @@ class LoRAT5(transformers.T5ForConditionalGeneration):
             inputs["original_mask"] = original_mask
 
         if not self.config.whitening and not self.gen:
+            if self.config.hyperencoder:
+                hidden_states = self.hyperencoder(**features, return_dict=True, output_hidden_states=True).hidden_states
+                instruction_input = hidden_states[-1]
+                instruction_attention_mask = features["attention_mask"]
+                features = (hidden_states[-1] + hidden_states[1]).mean(dim=1)
             features = self.adap_pooler(features)
 
         if self.gen:
@@ -717,6 +722,11 @@ class LoRAT5(transformers.T5ForConditionalGeneration):
                   **kwargs}
         
         if not self.config.whitening:
+            if self.config.hyperencoder:
+                hidden_states = self.hyperencoder(**features, return_dict=True, output_hidden_states=True).hidden_states
+                instruction_input = hidden_states[-1]
+                instruction_attention_mask = features["attention_mask"]
+                features = (hidden_states[-1] + hidden_states[1]).mean(dim=1)
             features = self.adap_pooler(features)
         
         self.features = features
@@ -781,13 +791,19 @@ class LoRAT5(transformers.T5ForConditionalGeneration):
                 l.layer[2].DenseReluDense.wi_1 = l.layer[2].DenseReluDense.wi_1.linear
                 l.layer[2].DenseReluDense.wo = l.layer[2].DenseReluDense.wo.linear
         for key in dir(self):
-            if 'hypernet' in key or 'pooler' in key:
+            if 'hypernet' in key or 'pooler' in key or 'hyperencoder' in key:
                 delattr(self, key)     
         
     def wrap_lora(self):
         """
         Wrap T5 to obtain a hypernetwork lora model.
         """
+        if self.config.hyperencoder:
+            self.hyperencoder = transformers.AutoModelForSeq2SeqLM.from_pretrained(
+                'google/t5-base-lm-adapt',
+                torch_dtype=torch.bfloat16
+                # cache_dir=model_args.cache_dir,
+            ).encoder
         self.down_hypernet = None
         self.up_hypernet = None
         self.embedding_dim = self.config.embedding_dim
@@ -845,7 +861,7 @@ class LoRAT5(transformers.T5ForConditionalGeneration):
                     param.requires_grad = False  # Actual freezing operation
         for layer in self.modules():
             for x, param in layer.named_parameters():
-                if "norm" in x or "emb" in x or "hypernet" in x or "pooler" in x:
+                if "norm" in x or "emb" in x or "hypernet" in x or "pooler" in x or "hyperencoder" in x:
                     param.requires_grad = True
         if 'ffn' in self.config.name:
             for layer in self.modules():

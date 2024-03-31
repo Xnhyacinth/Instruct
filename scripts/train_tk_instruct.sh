@@ -35,8 +35,9 @@ whitening=${15:-"0"}
 pos=${16:-"2"}
 s_pos=${17:-"10"}
 custom=${18:-"0"}
-ko=${19:-"0"}
-do_sample=${20:-"0"}
+hyper=${19:-"0"}
+ko=${20:-"0"}
+do_sample=${21:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
@@ -135,6 +136,11 @@ if [ "$tune" == "kd" ];then
         name="${name}_custom"
         output_dir="${output_dir}_custom"
         extra_args="${extra_args} --custom_model True"
+    fi
+    if [ "$hyper" == "hyper" ];then
+        name="${name}_hyper"
+        output_dir="${output_dir}_hyper"
+        extra_args="${extra_args} --hyperencoder True"
     fi
 fi
 if [ "$do_sample" == "sample" ];then

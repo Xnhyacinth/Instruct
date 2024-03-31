@@ -212,6 +212,12 @@ class ModelArguments:
             "help": "Whether to do_sample."
         },
     )
+    hyperencoder: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to do_sample."
+        },
+    )
     pooling: Optional[str] = field(
         default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
     )
@@ -512,13 +518,13 @@ def main():
                 "custom_model": model_args.custom_model,
                 "name": model_args.name,
                 "whitening": model_args.whitening,
+                "hyperencoder": model_args.hyperencoder
             }
             model_cls.config.update(hypernet_config)
             model = LoRAT5(model_cls.config)
             model.load_t5(model_cls.state_dict())
             trainable_params, all_param = get_parameter_number(model)
             logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
-
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
 

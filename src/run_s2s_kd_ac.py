@@ -21,6 +21,7 @@ Fine-tuning the library models for sequence to sequence.
 import logging
 import os
 from pathlib import Path
+import random
 import string
 import sys
 import json
@@ -52,10 +53,12 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
-from model import T5LoraWrapper
+from model import T5LoraWrapper, LoRAT5
 from ni_collator import DataCollatorForNI
 from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
 from compute_metrics import compute_metrics, compute_grouped_metrics
+
+
 
 set_progress_bar_enabled(False)
 logger = logging.getLogger(__name__)
@@ -84,6 +87,7 @@ class ModelArguments:
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     t_model: str = field(
+        default=None,
         metadata={"help": "Path to teacher model or model identifier from huggingface.co/models"}
     )
     config_name: Optional[str] = field(
@@ -124,6 +128,12 @@ class ModelArguments:
             "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
         },
         )
+    encoding_dim: Optional[int] = field(
+        default=255,
+        metadata={
+            "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
+        },
+        )
     temperature: Optional[float] = field(
         default=1.0,
         metadata={
@@ -141,6 +151,69 @@ class ModelArguments:
     alpha_kd: Optional[float] = field(
         default=0.4,
         metadata={"help": "weights of KD loss."}
+    )
+    use_kl: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use kl loss."
+        },
+    )
+    use_ce: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use ce loss."
+        },
+    )
+    use_hd: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use hidden states loss."
+        },
+    )
+    use_attn: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use attention loss."
+        },
+    )
+    select: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to select layers for hd & attn loss."
+        },
+    )
+    prompt: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use full prompt."
+        },
+    )
+    kd: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to knowledge distillation."
+        },
+    )
+    whitening: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use whitening algorithm."
+        },
+    )
+    custom_model: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use concat for input."
+        },
+    )
+    do_sample: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to do_sample."
+        },
+    )
+    pooling: Optional[str] = field(
+        default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
     )
 
 
@@ -249,6 +322,10 @@ class DataTrainingArguments:
         default=0,
         metadata={"help": "number of in-context positive examples."}
     )
+    s_num_pos_examples: Optional[int] = field(
+        default=0,
+        metadata={"help": "number of in-context positive examples."}
+    )
     num_neg_examples: Optional[int] = field(
         default=0,
         metadata={"help": "number of in-context negative examples."}
@@ -347,7 +424,6 @@ def main():
 
     # Set seed before initializing model.
     set_seed(training_args.seed)
-    accelerator = Accelerator()
     # Get the NaturalInstructions dataset
     raw_datasets = load_dataset(
         "src/ni_dataset.py", 
@@ -363,7 +439,19 @@ def main():
     # Distributed training:
     # The .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
-    config = AutoConfig.from_pretrained(
+    if model_args.custom_model:
+        from modeling_t5 import T5ForConditionalGeneration
+        from configuration_t5 import T5Config
+        model_cls = T5ForConditionalGeneration
+        config_cls = T5Config
+    else:
+        model_cls = AutoModelForSeq2SeqLM
+        config_cls = AutoConfig
+        # from modeling_t5 import T5ForConditionalGeneration
+        # from configuration_t5 import T5Config
+        # model_cls = T5ForConditionalGeneration
+        # config_cls = T5Config
+    config = config_cls.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         # cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
@@ -376,63 +464,63 @@ def main():
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    model = AutoModelForSeq2SeqLM.from_pretrained(
-        model_args.model_name_or_path,
-        from_tf=bool(".ckpt" in model_args.model_name_or_path),
-        config=config,
-        # cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
+    if training_args.do_predict and not training_args.do_train:
+        model_cls = LoRAT5
+        model = model_cls.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            device_map='auto',
+            torch_dtype=torch.bfloat16,
+            config=config,
+            # cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
+    else:
+        model_cls = model_cls.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            # cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
     
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
         trainable_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        return total_num, trainable_num
+        return trainable_num, total_num
     
-    model.resize_token_embeddings(len(tokenizer))
-    model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
-    trainable_params, all_param = get_parameter_number(model)
-    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+    if model_args.kd:
+        t_model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_args.t_model,
+            from_tf=bool(".ckpt" in model_args.t_model),
+            torch_dtype=torch.bfloat16,
+            # cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        ).cuda()
+        for layer in t_model.modules():
+            for _, param in layer.named_parameters():
+                param.requires_grad = False
+        if training_args.do_train:
+            model_args.d_model = t_model.config.d_model
+            hypernet_config = {
+                "pooler_d_model": t_model.config.d_model,
+                "embedding_dim": model_args.r,
+                "encoding_dim": model_args.encoding_dim,
+                "custom_model": model_args.custom_model,
+                "name": model_args.name,
+                "whitening": model_args.whitening,
+            }
+            model_cls.config.update(hypernet_config)
+            model = LoRAT5(model_cls.config)
+            model.load_t5(model_cls.state_dict())
+            trainable_params, all_param = get_parameter_number(model)
+            logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
 
-    t_model = AutoModelForSeq2SeqLM.from_pretrained(
-        model_args.t_model,
-        from_tf=bool(".ckpt" in model_args.t_model),
-        # cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    ).cuda()
-    for layer in t_model.modules():
-        for _, param in layer.named_parameters():
-            param.requires_grad = False
-    
-    if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
-        if isinstance(tokenizer, MBartTokenizer):
-            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[data_args.lang]
-        else:
-            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(data_args.lang)
-
-    if model.config.decoder_start_token_id is None:
-        raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
-
-    if (
-        hasattr(model.config, "max_position_embeddings")
-        and model.config.max_position_embeddings < data_args.max_source_length
-    ):
-        if model_args.resize_position_embeddings is None:
-            logger.warning(
-                f"Increasing the model's number of position embedding vectors from {model.config.max_position_embeddings} "
-                f"to {data_args.max_source_length}."
-            )
-            model.resize_position_embeddings(data_args.max_source_length)
-        elif model_args.resize_position_embeddings:
-            model.resize_position_embeddings(data_args.max_source_length)
-        else:
-            raise ValueError(
-                f"`--max_source_length` is set to {data_args.max_source_length}, but the model only has {model.config.max_position_embeddings}"
-                f" position encodings. Consider either reducing `--max_source_length` to {model.config.max_position_embeddings} or to automatically "
-                "resize the model's position encodings by passing `--resize_position_embeddings`."
-            )
+    if "t5-xxl" not in model_args.model_name_or_path:
+        model.resize_token_embeddings(len(tokenizer))
 
     if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
         assert (
@@ -468,14 +556,14 @@ def main():
         return vecs / (vecs**2).sum(axis=1, keepdims=True)**0.5
     
     def preprocess_function(sample):
-        padding ="max_length" if data_args.pad_to_max_length else "longest"
-        prefixs = []
+        sources, prefixs, instances, s_sources = [], [], [], []
         for instance, task, defi, pos, neg in zip(sample['Instance'], sample['Task'], sample['Definition'], sample['Positive Examples'], sample['Negative Examples']):
             add_task_name = data_args.add_task_name
             add_task_definition = data_args.add_task_definition
             num_pos_examples = data_args.num_pos_examples
             num_neg_examples = data_args.num_neg_examples
             add_explanation = data_args.add_explanation 
+            s_num_pos_examples = data_args.s_num_pos_examples
 
             task_input = ""
             # add the input first.
@@ -546,29 +634,87 @@ def main():
                 else:
                     break 
             
+            source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
+            s_source = task_name + definition + "".join(pos_examples[:s_num_pos_examples]) + task_input
+            tokenized_source = tokenizer(source)["input_ids"]
+            if len(tokenized_source) <= data_args.max_source_length:
+                sources.append(source)
+            else:
+                sources.append(tokenizer.decode(tokenized_source[:data_args.max_source_length], skip_special_tokens=True))
+            tokenized_s_source = tokenizer(s_source)["input_ids"]
+            if len(tokenized_s_source) <= data_args.max_source_length:
+                s_sources.append(s_source)
+            else:
+                s_sources.append(tokenizer.decode(tokenized_s_source[:data_args.max_source_length], skip_special_tokens=True))
+                
             # prefix
-            prefix = task_name + definition + "".join(pos_examples) + "".join(neg_examples)
+            prefix = task_name + definition + "".join(pos_examples[:s_num_pos_examples]) + "".join(neg_examples)
             prefixs.append(prefix)
-
-        with tokenizer.as_target_tokenizer():
-            prefix_inputs = tokenizer(
-                prefixs,
-                max_length=data_args.max_target_length,
-                padding=padding,
-                return_tensors="pt",
-                truncation=True,
-                pad_to_multiple_of=8 if training_args.fp16 else None
-            )
-        prefix_inputs = prefix_inputs.to(t_model.device)
-        output = t_model.encoder(**prefix_inputs, return_dict=True)
-        pooled_sentence = output.last_hidden_state # shape is [batch_size, seq_len, hidden_size]
-        pooled_sentence = np.array(torch.mean(pooled_sentence, dim=1).cpu().detach().numpy())
-        kernel, bias = compute_kernel_bias(pooled_sentence, 255)
-        pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
-        sample['features'] = pooled_sentence
+            if task not in prefixs_tasks.keys():
+                prefixs_tasks[task] = prefix
+            
+            # instance
+            instances.append(task_input)
+        sample['source'] = sources
+        sample['s_source'] = s_sources
+        sample['instance'] = instances
+        sample['prefix'] = prefixs
         return sample
-    raw_datasets['train'] = raw_datasets["train"].select(range(5000))
-    with training_args.main_process_first(desc="dataset map pre-processing"):
+    
+    def process_prefixs(prefixs_tasks):
+        prefixs = list(prefixs_tasks.values())
+        print(len(prefixs))
+        padding = "max_length" if data_args.pad_to_max_length else "longest"
+        t_model.eval()
+        with torch.no_grad():
+            pooled_sentence_list, instruction_input_list, attention_mask_list = [], [], []
+            g = 16
+            for i in range(0, len(prefixs), g):
+                last = i + g if i + g < len(prefixs) else len(prefixs)
+                prefix_inputs = tokenizer(
+                    prefixs[i: last],
+                    max_length=data_args.max_source_length,
+                    padding=padding,
+                    return_tensors="pt",
+                    truncation=True,
+                    pad_to_multiple_of=8 if training_args.fp16 else None
+                )
+                attention_mask_list.append(prefix_inputs["attention_mask"])
+                prefix_inputs = prefix_inputs.to(model.device)
+                # hidden_states = t_model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
+                hidden_states = model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
+                
+                if pooling == 'first_last_avg':
+                    pooled_sentence = (hidden_states[-1] + hidden_states[1])
+                elif pooling == 'last_avg':
+                    pooled_sentence = (hidden_states[-1])
+                elif pooling == 'last2avg':
+                    pooled_sentence = (hidden_states[-1] + hidden_states[-2])
+                else:
+                    raise Exception("unknown pooling {}".format(pooling))
+                    
+                instruction_input_list.append(pooled_sentence)
+                pooled_sentence = pooled_sentence.mean(dim=1)
+                pooled_sentence_list.append(pooled_sentence.float())
+            
+            pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
+            if model_args.whitening:
+                kernel, bias = compute_kernel_bias(pooled_sentence, 255)
+                pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
+            if model_args.custom_model:
+                instruction_input = torch.cat(instruction_input_list, 0)
+                attention_mask = torch.cat(attention_mask_list, 0)
+                return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), dict(zip(list(prefixs_tasks.keys()), instruction_input.tolist())), dict(zip(list(prefixs_tasks.keys()), attention_mask.tolist()))
+            else:
+                return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), None, None
+    
+    label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
+    # raw_datasets['train'] = raw_datasets['train'].select(range(200))
+    # raw_datasets['test'] = raw_datasets['test'].select(range(10))
+    if model_args.whitening:
+        pooling = model_args.pooling
+        prefixs_tasks = {}
+        
         raw_datasets = raw_datasets.map(
             preprocess_function,
             batched=True,
@@ -576,7 +722,36 @@ def main():
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
+        task_features, instruction_inputs, attention_masks = process_prefixs(prefixs_tasks)
 
+    if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
+        if isinstance(tokenizer, MBartTokenizer):
+            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[data_args.lang]
+        else:
+            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(data_args.lang)
+
+    if model.config.decoder_start_token_id is None:
+        raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
+
+    if (
+        hasattr(model.config, "max_position_embeddings")
+        and model.config.max_position_embeddings < data_args.max_source_length
+    ):
+        if model_args.resize_position_embeddings is None:
+            logger.warning(
+                f"Increasing the model's number of position embedding vectors from {model.config.max_position_embeddings} "
+                f"to {data_args.max_source_length}."
+            )
+            model.resize_position_embeddings(data_args.max_source_length)
+        elif model_args.resize_position_embeddings:
+            model.resize_position_embeddings(data_args.max_source_length)
+        else:
+            raise ValueError(
+                f"`--max_source_length` is set to {data_args.max_source_length}, but the model only has {model.config.max_position_embeddings}"
+                f" position encodings. Consider either reducing `--max_source_length` to {model.config.max_position_embeddings} or to automatically "
+                "resize the model's position encodings by passing `--resize_position_embeddings`."
+            )
+    
     if training_args.label_smoothing_factor > 0 and not hasattr(model, "prepare_decoder_input_ids_from_labels"):
         logger.warning(
             "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
@@ -605,10 +780,10 @@ def main():
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
 
     # Data collator
-    label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
+    model_args.s_num_pos_examples = data_args.s_num_pos_examples
     data_collator = DataCollatorForNI(
         tokenizer,
-        model=model,
+        model=t_model,
         padding="max_length" if data_args.pad_to_max_length else "longest",
         max_source_length=data_args.max_source_length,
         max_target_length=data_args.max_target_length,
@@ -620,14 +795,18 @@ def main():
         num_neg_examples=data_args.num_neg_examples,
         add_explanation=data_args.add_explanation,
         tk_instruct=data_args.tk_instruct,
-        kd=True
+        kd=model_args.kd,
+        task_features=task_features if model_args.whitening else None,
+        instruction_inputs=instruction_inputs if model_args.whitening else None,
+        attention_masks=attention_masks if model_args.whitening else None,
+        args=model_args,
+        student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples if training_args.do_train else False,
     )
     # we don't want to remove unused columns because we will prepare each batch during training, 
     # and some of the information will aslo be used in evaluation.
     training_args.remove_unused_columns = False 
 
     # Metric
-
     def compute_ni_metrics(dataset, preds, save_prefix=None):
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         references = [e["Instance"]["output"] for e in dataset]
@@ -650,6 +829,12 @@ def main():
                         "Prediction": pred
                     }) + "\n")
         return result
+    
+    # model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
+    # if model_args.load_hypernet_weights is not None:
+    #     model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
+    # trainable_params, all_param = get_parameter_number(model)
+    # logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     
     # Initialize our Trainer
     trainer = NIKDTrainer(
@@ -675,7 +860,16 @@ def main():
             checkpoint = last_checkpoint
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
+        model.config.save_pretrained(training_args.output_dir)
+        
+        # save_state = {}
+        # for param_tensor in model.state_dict():
+        #     if 'hypernet' in param_tensor:
+        #         save_state.update({param_tensor:model.state_dict()[param_tensor]})
+        # torch.save(save_state, f'{training_args.output_dir}/hypernet_weights.pt')
 
+        # torch.save(trainer.model.hypernet.state_dict(), model_args.save_adapter_path)
+        
         metrics = train_result.metrics
         max_train_samples = (
             data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
@@ -710,7 +904,7 @@ def main():
 
     if training_args.do_predict:
         logger.info("*** Predict ***")
-
+        
         predict_results = trainer.predict(
             predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
         )
