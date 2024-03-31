@@ -804,6 +804,7 @@ class LoRAT5(transformers.T5ForConditionalGeneration):
                 torch_dtype=torch.bfloat16
                 # cache_dir=model_args.cache_dir,
             ).encoder
+            self.config.pooler_d_model = 768
         self.down_hypernet = None
         self.up_hypernet = None
         self.embedding_dim = self.config.embedding_dim

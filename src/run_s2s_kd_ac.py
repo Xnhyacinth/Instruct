@@ -53,6 +53,9 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
+from Instruct.encdec.config import FiDConfig
+from Instruct.encdec.data_fid import FiDPretrainDataForEncDec
+from Instruct.encdec.utils import expand_dataset_to_prompts, load_dataset_names
 from model import T5LoraWrapper, LoRAT5
 from ni_collator import DataCollatorForNI
 from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
@@ -212,6 +215,12 @@ class ModelArguments:
             "help": "Whether to do_sample."
         },
     )
+    hyperencoder: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to do_sample."
+        },
+    )
     pooling: Optional[str] = field(
         default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
     )
@@ -338,6 +347,9 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."} 
     )
+    config_files: Optional[str] = field(
+        default="", metadata={"help": "P3 Data config."}
+    )
     
     def __post_init__(self):
         pass
@@ -425,14 +437,32 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
     # Get the NaturalInstructions dataset
-    raw_datasets = load_dataset(
-        "src/ni_dataset.py", 
-        data_dir=data_args.data_dir, 
-        task_dir=data_args.task_dir, 
-        cache_dir=model_args.cache_dir,
-        max_num_instances_per_task=data_args.max_num_instances_per_task,
-        max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
-    )
+    if "p3" in data_args.data_dir:
+        data_config = FiDConfig(data_args.config_files, data_args.kwargs)
+        # get prompt data
+        datasets = load_dataset_names("t0", "train")
+        prompt_identifiers = expand_dataset_to_prompts(datasets)
+        
+        train_data = FiDPretrainDataForEncDec(
+            logger = logger,
+            config = data_config,
+            tokenizer = tokenizer,
+            datasets = prompt_identifiers,
+            data_split = "train",
+            is_training = True
+        )
+        train_data.load_raw_data()
+        train_data.load_dataset()
+        train_data.load_dataloader()
+    else:
+        raw_datasets = load_dataset(
+            "src/ni_dataset.py", 
+            data_dir=data_args.data_dir, 
+            task_dir=data_args.task_dir, 
+            cache_dir=model_args.cache_dir,
+            max_num_instances_per_task=data_args.max_num_instances_per_task,
+            max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
+        )
    
     # Load pretrained model and tokenizer
     #
@@ -512,13 +542,13 @@ def main():
                 "custom_model": model_args.custom_model,
                 "name": model_args.name,
                 "whitening": model_args.whitening,
+                "hyperencoder": model_args.hyperencoder
             }
             model_cls.config.update(hypernet_config)
             model = LoRAT5(model_cls.config)
             model.load_t5(model_cls.state_dict())
             trainable_params, all_param = get_parameter_number(model)
             logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
-
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
 

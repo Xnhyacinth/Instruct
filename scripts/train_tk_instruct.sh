@@ -36,8 +36,9 @@ pos=${16:-"2"}
 s_pos=${17:-"10"}
 custom=${18:-"0"}
 hyper=${19:-"0"}
-ko=${20:-"0"}
-do_sample=${21:-"0"}
+dataset=${20:-"0"}
+ko=${21:-"0"}
+do_sample=${22:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
@@ -52,6 +53,12 @@ if [ "$e" == "eval" ];then
     output_dir="${output_dir}_eval"
     extra_args="--evaluation_strategy steps --do_eval --eval_steps 2500 --load_best_model_at_end True"
     echo name: ${name}
+fi
+if [ "$dataset" == "p3" ];then
+    config_files=0
+    data_dir=data/splits/1
+    name="${name}_1"
+    output_dir="${output_dir}_1"
 fi
 if [ "$tune" != "full" ];then
     name="${name}-${tune}_r${r}"
