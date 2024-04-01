@@ -126,6 +126,7 @@ if [ "$tune" == "kd" ];then
         name="${name}_prefix${prefix}"
         output_dir="${output_dir}_prefix${prefix}"
         lora="${lora}_prefix"
+        extra_args="${extra_args} --prefix_length ${prefix}"
     fi
     extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --kd True --s_num_pos_examples ${s_pos}"
     if [ "$prompt" == "fullprompt" ];then

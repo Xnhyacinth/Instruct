@@ -342,6 +342,7 @@ class T5Attention(nn.Module):
         self.n_heads = config.num_heads
         self.dropout = config.dropout_rate
         self.inner_dim = self.n_heads * self.key_value_proj_dim
+        self.config = config
 
         # Mesh TensorFlow initialization to avoid scaling before softmax
         self.q = nn.Linear(self.d_model, self.inner_dim, bias=False)
@@ -509,7 +510,11 @@ class T5Attention(nn.Module):
         scores = torch.matmul(
             query_states, key_states.transpose(3, 2)
         )  # equivalent of torch.einsum("bnqd,bnkd->bnqk", query_states, key_states), compatible with onnx op>9
-
+        
+        if "prefix" in self.config.name:
+            key_length = key_states.shape[2]
+            prefix_mask = -torch.zeros(mask.shape[0], mask.shape[1], mask.shape[2], self.config.prefix_length, device=mask.device, dtype=mask.dtype)
+            mask = torch.cat((prefix_mask, mask), dim=-1)
         if position_bias is None:
             if not self.has_relative_attention_bias:
                 position_bias = torch.zeros(
@@ -1624,7 +1629,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
                 attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
             )
 
-        if self.custom_model:
+        if self.config.custom_model:
             if encoder_outputs[0].size(0) != self.instruction_input.size(0):
                 n = encoder_outputs[0].size(0) // self.instruction_input.size(0)
                 self.instruction_input = self.instruction_input.repeat(1, n, 1).view(encoder_outputs[0].size(0), self.instruction_input.size(1), -1).to(encoder_outputs[0].dtype)

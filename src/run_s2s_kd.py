@@ -59,7 +59,6 @@ from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
 from compute_metrics import compute_metrics, compute_grouped_metrics
 
 
-
 set_progress_bar_enabled(False)
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,8 @@ except (LookupError, OSError):
         nltk.download("punkt", quiet=True)
 
 # A list of all multilingual tokenizer which require lang attribute.
-MULTILINGUAL_TOKENIZERS = [MBartTokenizer, MBartTokenizerFast, MBart50Tokenizer, MBart50TokenizerFast]
+MULTILINGUAL_TOKENIZERS = [
+    MBartTokenizer, MBartTokenizerFast, MBart50Tokenizer, MBart50TokenizerFast]
 
 
 @dataclass
@@ -84,11 +84,13 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+        metadata={
+            "help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     t_model: str = field(
         default=None,
-        metadata={"help": "Path to teacher model or model identifier from huggingface.co/models"}
+        metadata={
+            "help": "Path to teacher model or model identifier from huggingface.co/models"}
     )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
@@ -98,15 +100,18 @@ class ModelArguments:
     )
     cache_dir: Optional[str] = field(
         default=None,
-        metadata={"help": "Where to store the pretrained models downloaded from huggingface.co"},
+        metadata={
+            "help": "Where to store the pretrained models downloaded from huggingface.co"},
     )
     use_fast_tokenizer: bool = field(
         default=True,
-        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
+        metadata={
+            "help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
     )
     model_revision: str = field(
         default="main",
-        metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
+        metadata={
+            "help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
     use_auth_token: bool = field(
         default=False,
@@ -127,25 +132,25 @@ class ModelArguments:
         metadata={
             "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
         },
-        )
+    )
     encoding_dim: Optional[int] = field(
         default=255,
         metadata={
             "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
         },
-        )
+    )
     prefix_length: Optional[int] = field(
         default=32,
         metadata={
             "help": "The length of gen prefix."
         },
-        )
+    )
     temperature: Optional[float] = field(
         default=1.0,
         metadata={
             "help": "The temperature."
         },
-        )
+    )
     load_hypernet_weights: str = field(
         default=None,
         metadata={"help": "Path to hypernet weights, otherwise random init."},
@@ -234,7 +239,8 @@ class DataTrainingArguments:
     """
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
-    lang: str = field(default=None, metadata={"help": "Language id for multilingual model."})
+    lang: str = field(default=None, metadata={
+                      "help": "Language id for multilingual model."})
     data_dir: str = field(
         default=None, metadata={"help": "The directory for saving the NaturalInstructions train/dev/test splits."}
     )
@@ -328,7 +334,8 @@ class DataTrainingArguments:
     )
     add_task_definition: Optional[bool] = field(
         default=True,
-        metadata={"help": "whether to preappend task definition before the task input."}
+        metadata={
+            "help": "whether to preappend task definition before the task input."}
     )
     num_pos_examples: Optional[int] = field(
         default=0,
@@ -344,13 +351,14 @@ class DataTrainingArguments:
     )
     add_explanation: Optional[bool] = field(
         default=False,
-        metadata={"help": "whether to add explanation for both the postive examples and negtive examples."}
+        metadata={
+            "help": "whether to add explanation for both the postive examples and negtive examples."}
     )
     tk_instruct: Optional[bool] = field(
         default=False,
-        metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."} 
+        metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."}
     )
-    
+
     def __post_init__(self):
         pass
 
@@ -359,9 +367,11 @@ class DataTrainingArguments:
 class NITrainingArguments(Seq2SeqTrainingArguments):
     denser_evaluation: Optional[bool] = field(
         default=False,
-        metadata={"help": "If specifid, the model will do more evaluation at the beginning of training."}
+        metadata={
+            "help": "If specifid, the model will do more evaluation at the beginning of training."}
     )
-    do_demo: bool = field(default=False, metadata={"help": "Whether to run the model as a demo in the terminal."})
+    do_demo: bool = field(default=False, metadata={
+                          "help": "Whether to run the model as a demo in the terminal."})
 
 
 def main():
@@ -369,11 +379,13 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, NITrainingArguments))
+    parser = HfArgumentParser(
+        (ModelArguments, DataTrainingArguments, NITrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_args, data_args, training_args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
@@ -386,7 +398,7 @@ def main():
             o.write(f'{k} = {v}\n')
         for k, v in sorted(data_args.__dict__.items(), key=lambda x: x[0]):
             o.write(f'{k} = {v}\n')
-    
+
     # Setup logging
     logging.basicConfig(
         filename=os.path.join(training_args.output_dir, "training.log"),
@@ -438,14 +450,14 @@ def main():
     set_seed(training_args.seed)
     # Get the NaturalInstructions dataset
     raw_datasets = load_dataset(
-        "src/ni_dataset.py", 
-        data_dir=data_args.data_dir, 
-        task_dir=data_args.task_dir, 
+        "src/ni_dataset.py",
+        data_dir=data_args.data_dir,
+        task_dir=data_args.task_dir,
         cache_dir=model_args.cache_dir,
         max_num_instances_per_task=data_args.max_num_instances_per_task,
         max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
     )
-   
+
     # Load pretrained model and tokenizer
     #
     # Distributed training:
@@ -457,12 +469,12 @@ def main():
         model_cls = T5ForConditionalGeneration
         config_cls = T5Config
     else:
-        model_cls = AutoModelForSeq2SeqLM
-        config_cls = AutoConfig
-        # from modeling_t5 import T5ForConditionalGeneration
-        # from configuration_t5 import T5Config
-        # model_cls = T5ForConditionalGeneration
-        # config_cls = T5Config
+        # model_cls = AutoModelForSeq2SeqLM
+        # config_cls = AutoConfig
+        from modeling_t5 import T5ForConditionalGeneration
+        from configuration_t5 import T5Config
+        model_cls = T5ForConditionalGeneration
+        config_cls = T5Config
     config = config_cls.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         # cache_dir=model_args.cache_dir,
@@ -497,12 +509,13 @@ def main():
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
-    
+
     def get_parameter_number(model):
         total_num = sum(p.numel() for p in model.parameters())
-        trainable_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        trainable_num = sum(p.numel()
+                            for p in model.parameters() if p.requires_grad)
         return trainable_num, total_num
-    
+
     if model_args.kd:
         t_model = AutoModelForSeq2SeqLM.from_pretrained(
             model_args.t_model,
@@ -528,11 +541,13 @@ def main():
             }
             if "prefix" in model_args.name:
                 hypernet_config["prefix_length"] = model_args.prefix_length
+                hypernet_config["max_source_length"] = data_args.max_source_length
             model_cls.config.update(hypernet_config)
             model = LoRAT5(model_cls.config)
             model.load_t5(model_cls.state_dict())
             trainable_params, all_param = get_parameter_number(model)
-            logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+            logger.info(
+                f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
 
@@ -568,7 +583,7 @@ def main():
         if not (kernel is None or bias is None):
             vecs = (vecs + bias).dot(kernel)
         return vecs / (vecs**2).sum(axis=1, keepdims=True)**0.5
-    
+
     def preprocess_function(sample):
         sources, prefixs, instances, s_sources = [], [], [], []
         for instance, task, defi, pos, neg in zip(sample['Instance'], sample['Task'], sample['Definition'], sample['Positive Examples'], sample['Negative Examples']):
@@ -576,7 +591,7 @@ def main():
             add_task_definition = data_args.add_task_definition
             num_pos_examples = data_args.num_pos_examples
             num_neg_examples = data_args.num_neg_examples
-            add_explanation = data_args.add_explanation 
+            add_explanation = data_args.add_explanation
             s_num_pos_examples = data_args.s_num_pos_examples
 
             task_input = ""
@@ -587,7 +602,7 @@ def main():
                 task_input += "."
             task_input += "\n"
             task_input += "Output: "
-            
+
             task_name = ""
             if add_task_name:
                 task_name += task + ". "
@@ -595,13 +610,14 @@ def main():
             definition = ""
             if add_task_definition:
                 if isinstance(defi, list):
-                    definition = "Definition: " + defi[0].strip() # TODO: should we use <Definition>?
+                    # TODO: should we use <Definition>?
+                    definition = "Definition: " + defi[0].strip()
                 else:
                     definition = "Definition: " + defi.strip()
                 if not definition[-1] in string.punctuation:
                     definition += "."
                 definition += "\n\n"
-            
+
             # try to add positive examples.
             pos_examples = []
             for idx, pos_example in enumerate(pos[:num_pos_examples]):
@@ -613,7 +629,7 @@ def main():
                 pos_example_str += f" Output: {pos_example['output'].strip()}"
                 if not pos_example_str[-1] in string.punctuation:
                     pos_example_str += "."
-                pos_example_str += "\n" 
+                pos_example_str += "\n"
                 if add_explanation and "explanation" in pos_example:
                     pos_example_str += f" Explanation: {pos_example['explanation'].strip()}"
                     if not pos_example_str[-1] in string.punctuation:
@@ -624,7 +640,7 @@ def main():
                     pos_examples.append(pos_example_str)
                 else:
                     break
-            
+
             # try to add negative examples.
             neg_examples = []
             for idx, neg_example in enumerate(neg[:num_neg_examples]):
@@ -646,27 +662,33 @@ def main():
                 if len(tokenizer(definition + " ".join(pos_examples) + " ".join(neg_examples) + neg_example_str + task_input)["input_ids"]) <= data_args.max_source_length:
                     neg_examples.append(neg_example_str)
                 else:
-                    break 
-            
-            source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
-            s_source = task_name + definition + "".join(pos_examples[:s_num_pos_examples]) + task_input
+                    break
+
+            source = task_name + definition + \
+                "".join(pos_examples) + "".join(neg_examples) + task_input
+            s_source = task_name + definition + \
+                "".join(pos_examples[:s_num_pos_examples]) + task_input
             tokenized_source = tokenizer(source)["input_ids"]
             if len(tokenized_source) <= data_args.max_source_length:
                 sources.append(source)
             else:
-                sources.append(tokenizer.decode(tokenized_source[:data_args.max_source_length], skip_special_tokens=True))
+                sources.append(tokenizer.decode(
+                    tokenized_source[:data_args.max_source_length], skip_special_tokens=True))
             tokenized_s_source = tokenizer(s_source)["input_ids"]
             if len(tokenized_s_source) <= data_args.max_source_length:
                 s_sources.append(s_source)
             else:
-                s_sources.append(tokenizer.decode(tokenized_s_source[:data_args.max_source_length], skip_special_tokens=True))
-                
+                s_sources.append(tokenizer.decode(
+                    tokenized_s_source[:data_args.max_source_length], skip_special_tokens=True))
+
             # prefix
-            prefix = task_name + definition + "".join(pos_examples[:s_num_pos_examples]) + "".join(neg_examples)
+            prefix = task_name + definition + \
+                "".join(pos_examples[:s_num_pos_examples]
+                        ) + "".join(neg_examples)
             prefixs.append(prefix)
             if task not in prefixs_tasks.keys():
                 prefixs_tasks[task] = prefix
-            
+
             # instance
             instances.append(task_input)
         sample['source'] = sources
@@ -674,7 +696,7 @@ def main():
         sample['instance'] = instances
         sample['prefix'] = prefixs
         return sample
-    
+
     def process_prefixs(prefixs_tasks):
         prefixs = list(prefixs_tasks.values())
         print(len(prefixs))
@@ -696,8 +718,9 @@ def main():
                 attention_mask_list.append(prefix_inputs["attention_mask"])
                 prefix_inputs = prefix_inputs.to(model.device)
                 # hidden_states = t_model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
-                hidden_states = model.encoder(**prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
-                
+                hidden_states = model.encoder(
+                    **prefix_inputs, return_dict=True, output_hidden_states=True).hidden_states
+
                 if pooling == 'first_last_avg':
                     pooled_sentence = (hidden_states[-1] + hidden_states[1])
                 elif pooling == 'last_avg':
@@ -706,29 +729,31 @@ def main():
                     pooled_sentence = (hidden_states[-1] + hidden_states[-2])
                 else:
                     raise Exception("unknown pooling {}".format(pooling))
-                    
+
                 instruction_input_list.append(pooled_sentence)
                 pooled_sentence = pooled_sentence.mean(dim=1)
                 pooled_sentence_list.append(pooled_sentence.float())
-            
+
             pooled_sentence = torch.cat(pooled_sentence_list, 0).cpu().numpy()
             if model_args.whitening:
                 kernel, bias = compute_kernel_bias(pooled_sentence, 255)
-                pooled_sentence = transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
+                pooled_sentence = transform_and_normalize(
+                    pooled_sentence, kernel=kernel, bias=bias)
             if model_args.custom_model:
                 instruction_input = torch.cat(instruction_input_list, 0)
                 attention_mask = torch.cat(attention_mask_list, 0)
                 return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), dict(zip(list(prefixs_tasks.keys()), instruction_input.tolist())), dict(zip(list(prefixs_tasks.keys()), attention_mask.tolist()))
             else:
                 return dict(zip(list(prefixs_tasks.keys()), pooled_sentence.tolist())), None, None
-    
-    label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
+
+    label_pad_token_id = - \
+        100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     # raw_datasets['train'] = raw_datasets['train'].select(range(200))
     # raw_datasets['test'] = raw_datasets['test'].select(range(10))
     if model_args.whitening:
         pooling = model_args.pooling
         prefixs_tasks = {}
-        
+
         raw_datasets = raw_datasets.map(
             preprocess_function,
             batched=True,
@@ -736,16 +761,19 @@ def main():
             load_from_cache_file=not data_args.overwrite_cache,
             desc="Running tokenizer on dataset",
         )
-        task_features, instruction_inputs, attention_masks = process_prefixs(prefixs_tasks)
+        task_features, instruction_inputs, attention_masks = process_prefixs(
+            prefixs_tasks)
 
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
             model.config.decoder_start_token_id = tokenizer.lang_code_to_id[data_args.lang]
         else:
-            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(data_args.lang)
+            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(
+                data_args.lang)
 
     if model.config.decoder_start_token_id is None:
-        raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
+        raise ValueError(
+            "Make sure that `config.decoder_start_token_id` is correctly defined")
 
     if (
         hasattr(model.config, "max_position_embeddings")
@@ -765,7 +793,7 @@ def main():
                 f" position encodings. Consider either reducing `--max_source_length` to {model.config.max_position_embeddings} or to automatically "
                 "resize the model's position encodings by passing `--resize_position_embeddings`."
             )
-    
+
     if training_args.label_smoothing_factor > 0 and not hasattr(model, "prepare_decoder_input_ids_from_labels"):
         logger.warning(
             "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
@@ -777,21 +805,24 @@ def main():
             raise ValueError("--do_train requires a train dataset")
         train_dataset = raw_datasets["train"]
         if data_args.max_train_samples is not None:
-            train_dataset = train_dataset.select(range(data_args.max_train_samples))
+            train_dataset = train_dataset.select(
+                range(data_args.max_train_samples))
 
     if training_args.do_eval:
         if "validation" not in raw_datasets:
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = raw_datasets["validation"]
         if data_args.max_eval_samples is not None:
-            eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
+            eval_dataset = eval_dataset.select(
+                range(data_args.max_eval_samples))
 
     if training_args.do_predict:
         if "test" not in raw_datasets:
             raise ValueError("--do_predict requires a test dataset")
         predict_dataset = raw_datasets["test"]
         if data_args.max_predict_samples is not None:
-            predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
+            predict_dataset = predict_dataset.select(
+                range(data_args.max_predict_samples))
 
     # Data collator
     model_args.s_num_pos_examples = data_args.s_num_pos_examples
@@ -814,23 +845,28 @@ def main():
         instruction_inputs=instruction_inputs if model_args.whitening else None,
         attention_masks=attention_masks if model_args.whitening else None,
         args=model_args,
-        student_input=data_args.s_num_pos_examples!=data_args.num_pos_examples if training_args.do_train else False,
+        student_input=data_args.s_num_pos_examples != data_args.num_pos_examples if training_args.do_train else False,
     )
-    # we don't want to remove unused columns because we will prepare each batch during training, 
+    # we don't want to remove unused columns because we will prepare each batch during training,
     # and some of the information will aslo be used in evaluation.
-    training_args.remove_unused_columns = False 
+    training_args.remove_unused_columns = False
 
     # Metric
     def compute_ni_metrics(dataset, preds, save_prefix=None):
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         references = [e["Instance"]["output"] for e in dataset]
-        result = compute_metrics(predictions=decoded_preds, references=references)
-        result_per_task = compute_grouped_metrics(predictions=decoded_preds, references=references, groups=dataset["Task"])
+        result = compute_metrics(
+            predictions=decoded_preds, references=references)
+        result_per_task = compute_grouped_metrics(
+            predictions=decoded_preds, references=references, groups=dataset["Task"])
         result.update(result_per_task)
-        categories = ["_".join(it[0].lower().split()) for it in dataset["Categories"]]
-        result_per_category = compute_grouped_metrics(predictions=decoded_preds, references=references, groups=categories)
+        categories = ["_".join(it[0].lower().split())
+                      for it in dataset["Categories"]]
+        result_per_category = compute_grouped_metrics(
+            predictions=decoded_preds, references=references, groups=categories)
         result.update(result_per_category)
-        prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
+        prediction_lens = [np.count_nonzero(
+            pred != tokenizer.pad_token_id) for pred in preds]
         result["gen_len"] = np.mean(prediction_lens)
         result = {k: round(v, 4) for k, v in result.items()}
         if save_prefix is not None:
@@ -843,13 +879,13 @@ def main():
                         "Prediction": pred
                     }) + "\n")
         return result
-    
+
     # model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     # if model_args.load_hypernet_weights is not None:
     #     model.load_state_dict(torch.load(model_args.load_hypernet_weights), strict=False, map_location=torch.device('cpu'))
     # trainable_params, all_param = get_parameter_number(model)
     # logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
-    
+
     # Initialize our Trainer
     trainer = NIKDTrainer(
         model=model,
@@ -859,7 +895,8 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
-        callbacks=[DenserEvalCallback] if training_args.denser_evaluation else None
+        callbacks=[
+            DenserEvalCallback] if training_args.denser_evaluation else None
     )
     trainer.post_init(model_args, t_model)
     # trainer.post_init(model_args, t_model)
@@ -875,7 +912,7 @@ def main():
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
         model.config.save_pretrained(training_args.output_dir)
-        
+
         # save_state = {}
         # for param_tensor in model.state_dict():
         #     if 'hypernet' in param_tensor:
@@ -883,10 +920,11 @@ def main():
         # torch.save(save_state, f'{training_args.output_dir}/hypernet_weights.pt')
 
         # torch.save(trainer.model.hypernet.state_dict(), model_args.save_adapter_path)
-        
+
         metrics = train_result.metrics
         max_train_samples = (
-            data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
+            data_args.max_train_samples if data_args.max_train_samples is not None else len(
+                train_dataset)
         )
         metrics["train_samples"] = min(max_train_samples, len(train_dataset))
 
@@ -907,8 +945,10 @@ def main():
 
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
-        metrics = trainer.evaluate(max_length=max_length, num_beams=num_beams, metric_key_prefix="eval")
-        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
+        metrics = trainer.evaluate(
+            max_length=max_length, num_beams=num_beams, metric_key_prefix="eval")
+        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(
+            eval_dataset)
         metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
 
         trainer.log_metrics("eval", metrics)
@@ -918,15 +958,17 @@ def main():
 
     if training_args.do_predict:
         logger.info("*** Predict ***")
-        
+
         predict_results = trainer.predict(
             predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
         )
         metrics = predict_results.metrics
         max_predict_samples = (
-            data_args.max_predict_samples if data_args.max_predict_samples is not None else len(predict_dataset)
+            data_args.max_predict_samples if data_args.max_predict_samples is not None else len(
+                predict_dataset)
         )
-        metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
+        metrics["predict_samples"] = min(
+            max_predict_samples, len(predict_dataset))
 
         trainer.log(metrics)
         trainer.log_metrics("predict", metrics)
@@ -943,7 +985,8 @@ def main():
                 # output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
                 # with open(output_prediction_file, "w") as writer:
                 #     writer.write("\n".join(predictions))
-                output_prediction_file = os.path.join(training_args.output_dir, "predicted_examples.jsonl")
+                output_prediction_file = os.path.join(
+                    training_args.output_dir, "predicted_examples.jsonl")
                 with open(output_prediction_file, "w") as fout:
                     for example, prediction in zip(predict_dataset, predictions):
                         example["prediction"] = prediction
@@ -959,12 +1002,15 @@ def main():
         trainer._max_length = max_length
         trainer._num_beams = num_beams
         while True:
-            user_input = input("Please enter your input to the model, or enter 'quit' to exit: ")
+            user_input = input(
+                "Please enter your input to the model, or enter 'quit' to exit: ")
             if user_input.lower() == "quit":
                 break
             inputs = tokenizer([user_input], return_tensors="pt")
-            _, preds, _ = trainer.prediction_step(model, inputs=inputs, prediction_loss_only=False)
-            print(f"Model generates: {tokenizer.decode(preds[0], skip_special_tokens=True)}\n\n")
+            _, preds, _ = trainer.prediction_step(
+                model, inputs=inputs, prediction_loss_only=False)
+            print(
+                f"Model generates: {tokenizer.decode(preds[0], skip_special_tokens=True)}\n\n")
 
     return results
 

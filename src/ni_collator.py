@@ -223,7 +223,7 @@ class DataCollatorForNI:
                     prefixs_inputs = self.tokenizer(
                         prefixs,
                         max_length=self.max_source_length,
-                        padding=self.padding,
+                        padding=self.padding if not self.args.prefix_length > 0 else "max_length",
                         return_tensors=self.return_tensors,
                         truncation=True,
                         pad_to_multiple_of=self.pad_to_multiple_of
@@ -243,7 +243,7 @@ class DataCollatorForNI:
                         else:
                             raise Exception("unknown pooling {}".format(self.args.pooling))
                         
-                        if self.args.custom_model:
+                        if self.args.custom_model or self.args.prefix_length > 0:
                             instruction_inputs = hidden_states[-1].cpu()
                             attention_masks = prefixs_inputs['attention_mask'].cpu()
                         features = pooled_sentence.mean(dim=1).cpu()
@@ -264,9 +264,6 @@ class DataCollatorForNI:
                 model_inputs["labels"] = t_model_inputs["labels"]
                 if "decoder_input_ids" in t_model_inputs.keys():
                     model_inputs["decoder_input_ids"] = decoder_input_ids
-                if not self.args.hyperencoder:
-                    model_inputs["instruction_input"] = torch.Tensor(instruction_inputs)
-                    model_inputs["instruction_attention_mask"] = torch.Tensor(attention_masks)
             elif self.student_input:
                 if self.text_only:
                     model_inputs = {"inputs": s_sources}
@@ -288,4 +285,7 @@ class DataCollatorForNI:
                 model_inputs["features"] = features
             else:
                 model_inputs["features"] = torch.Tensor(features)
+                if self.args.prefix_length > 0 or self.args.custom_model:
+                    model_inputs["instruction_input"] = torch.Tensor(instruction_inputs)
+                    model_inputs["instruction_attention_mask"] = torch.Tensor(attention_masks)
             return t_model_inputs, model_inputs
