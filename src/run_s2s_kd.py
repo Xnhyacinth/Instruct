@@ -134,6 +134,12 @@ class ModelArguments:
             "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
         },
         )
+    prefix_length: Optional[int] = field(
+        default=32,
+        metadata={
+            "help": "The length of gen prefix."
+        },
+        )
     temperature: Optional[float] = field(
         default=1.0,
         metadata={
@@ -518,8 +524,10 @@ def main():
                 "custom_model": model_args.custom_model,
                 "name": model_args.name,
                 "whitening": model_args.whitening,
-                "hyperencoder": model_args.hyperencoder
+                "hyperencoder": model_args.hyperencoder,
             }
+            if "prefix" in model_args.name:
+                hypernet_config["prefix_length"] = model_args.prefix_length
             model_cls.config.update(hypernet_config)
             model = LoRAT5(model_cls.config)
             model.load_t5(model_cls.state_dict())
