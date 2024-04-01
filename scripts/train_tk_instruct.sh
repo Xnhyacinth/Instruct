@@ -36,9 +36,9 @@ pos=${16:-"2"}
 s_pos=${17:-"10"}
 custom=${18:-"0"}
 hyper=${19:-"0"}
-dataset=${20:-"0"}
-ko=${21:-"0"}
-prefix=${22:-"0"}
+ko=${20:-"0"}
+prefix=${21:-"0"}
+dataset=${22:-"0"}
 do_sample=${23:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
