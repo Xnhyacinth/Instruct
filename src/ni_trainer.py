@@ -175,7 +175,7 @@ class NIKDTrainer(Seq2SeqTrainer):
                     + (1 - self.config.alpha_kd) * loss
                 )
         if self.config.use_kl:
-            loss = self.cal_kl(logits, t_logits) * 0.2 + loss * 0.9
+            loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
         if self.config.use_hd:
             loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"))
             loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states")) * 10
