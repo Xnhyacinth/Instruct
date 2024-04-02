@@ -24,7 +24,7 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
         self.wrap_lora()
         self.gen = False
         # self.encoder.block[0].layer[0].SelfAttention.gen = False
-    
+
     def emb(self, l):
         """
         PCA Embedding of linguistic attestation vector
@@ -33,61 +33,79 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
         if not isinstance(l, torch.Tensor):
             feature = torch.Tensor(l)
         return feature
-   
+
     def set_features(self, features):
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
-        
+
         self.decoder_hypernet.down_hypernet.set_features(self.emb(features))
         self.decoder_hypernet.up_hypernet.set_features(self.emb(features))
         self.cross_hypernet.down_hypernet.set_features(self.emb(features))
         self.cross_hypernet.up_hypernet.set_features(self.emb(features))
-        
+
         if 'ko' in self.config.name:
             self.hypernet_ko.down_hypernet.set_features(self.emb(features))
             self.hypernet_ko.up_hypernet.set_features(self.emb(features))
-            self.decoder_hypernet_ko.down_hypernet.set_features(self.emb(features))
-            self.decoder_hypernet_ko.up_hypernet.set_features(self.emb(features))
-            self.cross_hypernet_ko.down_hypernet.set_features(self.emb(features))
+            self.decoder_hypernet_ko.down_hypernet.set_features(
+                self.emb(features))
+            self.decoder_hypernet_ko.up_hypernet.set_features(
+                self.emb(features))
+            self.cross_hypernet_ko.down_hypernet.set_features(
+                self.emb(features))
             self.cross_hypernet_ko.up_hypernet.set_features(self.emb(features))
         if 'hyfn' in self.config.name:
-            self.ffn_en_hypernet_wi.down_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wi.up_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wi.down_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wi.up_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wo.down_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wo.up_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wo.down_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wo.up_hypernet.set_features(self.emb(features))
-    
+            self.ffn_en_hypernet_wi.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wi.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wi.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wi.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wo.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wo.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wo.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wo.up_hypernet.set_features(
+                self.emb(features))
+
     def set_prefixs(self, features):
         self.hypernet.down_hypernet.set_prefixs(self.emb(features))
         self.hypernet.up_hypernet.set_prefixs(self.emb(features))
-        
+
         self.decoder_hypernet.down_hypernet.set_prefixs(self.emb(features))
         self.decoder_hypernet.up_hypernet.set_prefixs(self.emb(features))
         self.cross_hypernet.down_hypernet.set_prefixs(self.emb(features))
         self.cross_hypernet.up_hypernet.set_prefixs(self.emb(features))
-        
+
         if 'ko' in self.config.name:
             self.hypernet_ko.down_hypernet.set_prefixs(self.emb(features))
             self.hypernet_ko.up_hypernet.set_prefixs(self.emb(features))
-            self.decoder_hypernet_ko.down_hypernet.set_prefixs(self.emb(features))
-            self.decoder_hypernet_ko.up_hypernet.set_prefixs(self.emb(features))
-            self.cross_hypernet_ko.down_hypernet.set_prefixs(self.emb(features))
+            self.decoder_hypernet_ko.down_hypernet.set_prefixs(
+                self.emb(features))
+            self.decoder_hypernet_ko.up_hypernet.set_prefixs(
+                self.emb(features))
+            self.cross_hypernet_ko.down_hypernet.set_prefixs(
+                self.emb(features))
             self.cross_hypernet_ko.up_hypernet.set_prefixs(self.emb(features))
         if 'hyfn' in self.config.name:
-            self.ffn_en_hypernet_wi.down_hypernet.set_prefixs(self.emb(features))
+            self.ffn_en_hypernet_wi.down_hypernet.set_prefixs(
+                self.emb(features))
             self.ffn_en_hypernet_wi.up_hypernet.set_prefixs(self.emb(features))
-            self.ffn_de_hypernet_wi.down_hypernet.set_prefixs(self.emb(features))
+            self.ffn_de_hypernet_wi.down_hypernet.set_prefixs(
+                self.emb(features))
             self.ffn_de_hypernet_wi.up_hypernet.set_prefixs(self.emb(features))
-            self.ffn_en_hypernet_wo.down_hypernet.set_prefixs(self.emb(features))
+            self.ffn_en_hypernet_wo.down_hypernet.set_prefixs(
+                self.emb(features))
             self.ffn_en_hypernet_wo.up_hypernet.set_prefixs(self.emb(features))
-            self.ffn_de_hypernet_wo.down_hypernet.set_prefixs(self.emb(features))
+            self.ffn_de_hypernet_wo.down_hypernet.set_prefixs(
+                self.emb(features))
             self.ffn_de_hypernet_wo.up_hypernet.set_prefixs(self.emb(features))
-    
-    def forward(self, input_ids=None, attention_mask=None, labels=None, features=None, 
-                instruction_input=None, instruction_attention_mask=None, original_mask=None, 
+
+    def forward(self, input_ids=None, attention_mask=None, labels=None, features=None,
+                instruction_input=None, instruction_attention_mask=None, original_mask=None,
                 original_embedding=None, include_original=False, **kwargs):
         """
         forward model needs to include features parameter for Trainer to not discard this feature
@@ -100,7 +118,8 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
 
         if not self.config.whitening and not self.gen:
             if self.config.hyperencoder:
-                hidden_states = self.hyperencoder(**features, return_dict=True, output_hidden_states=True).hidden_states
+                hidden_states = self.hyperencoder(
+                    **features, return_dict=True, output_hidden_states=True).hidden_states
                 instruction_input = hidden_states[-1]
                 instruction_attention_mask = features["attention_mask"]
                 features = (hidden_states[-1] + hidden_states[1]).mean(dim=1)
@@ -110,71 +129,72 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
             features = self.features
             instruction_input = self.instruction_input_gen
             instruction_attention_mask = self.instruction_attention_mask_gen
-        
+
         self.instruction_input = instruction_input
         self.instruction_attention_mask = instruction_attention_mask
 
         self.set_features(features)
         if "prefix" in self.config.name:
             self.set_prefixs(instruction_input)
-            
+
         return super().forward(**inputs)
 
     def generate(self, input_ids, attention_mask, features=None, instruction_input=None, instruction_attention_mask=None, **kwargs):
         inputs = {"input_ids": input_ids,
                   "attention_mask": attention_mask,
                   **kwargs}
-        
+
         if not self.config.whitening:
             if self.config.hyperencoder:
-                hidden_states = self.hyperencoder(**features, return_dict=True, output_hidden_states=True).hidden_states
+                hidden_states = self.hyperencoder(
+                    **features, return_dict=True, output_hidden_states=True).hidden_states
                 instruction_input = hidden_states[-1]
                 instruction_attention_mask = features["attention_mask"]
                 features = (hidden_states[-1] + hidden_states[1]).mean(dim=1)
             features = self.adap_pooler(features)
-        
+
         self.features = features
         self.instruction_input_gen = instruction_input
         self.instruction_attention_mask_gen = instruction_attention_mask
-        
+
         self.set_features(features)
         if "prefix" in self.config.name:
             self.set_prefixs(instruction_input)
 
         return super().generate(**inputs)
-    
+
     def load_t5(self, state_dict):
         self.unwrap_lora()
         self.load_state_dict(state_dict)
         self.wrap_lora()
         self.freeze_params()
-    
+
     def unwrap_lora(self):
         for i, l in enumerate(self.encoder.block):
             l = l.module if hasattr(l, "module") else l
             l.layer[0].SelfAttention.q = l.layer[0].SelfAttention.q.linear
             l.layer[0].SelfAttention.v = l.layer[0].SelfAttention.v.linear
-            
+
         for i, l in enumerate(self.decoder.block):
             l = l.module if hasattr(l, "module") else l
             l.layer[0].SelfAttention.q = l.layer[0].SelfAttention.q.linear
             l.layer[0].SelfAttention.v = l.layer[0].SelfAttention.v.linear
             l.layer[1].EncDecAttention.q = l.layer[1].EncDecAttention.q.linear
             l.layer[1].EncDecAttention.v = l.layer[1].EncDecAttention.v.linear
-        
+
         if 'ko' in self.config.name:
             for i, l in enumerate(self.encoder.block):
                 l = l.module if hasattr(l, "module") else l
                 l.layer[0].SelfAttention.k = l.layer[0].SelfAttention.k.linear
                 l.layer[0].SelfAttention.o = l.layer[0].SelfAttention.o.linear
-                
+
             for i, l in enumerate(self.decoder.block):
                 l = l.module if hasattr(l, "module") else l
                 l.layer[0].SelfAttention.k = l.layer[0].SelfAttention.k.linear
                 l.layer[0].SelfAttention.o = l.layer[0].SelfAttention.o.linear
                 l.layer[1].EncDecAttention.k = l.layer[1].EncDecAttention.k.linear
                 l.layer[1].EncDecAttention.o = l.layer[1].EncDecAttention.o.linear
-        
+
         if 'hyfn' in self.config.name:
             for i, l in enumerate(self.encoder.block):
                 l = l.module if hasattr(l, "module") else l
@@ -188,8 +208,8 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 l.layer[2].DenseReluDense.wo = l.layer[2].DenseReluDense.wo.linear
         for key in dir(self):
             if 'hypernet' in key or 'pooler' in key or 'hyperencoder' in key:
-                delattr(self, key) 
-        
+                delattr(self, key)
+
     def wrap_lora(self):
         """
         Wrap T5 to obtain a hypernetwork lora model.
@@ -207,17 +227,18 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
         self.encoding_dim = self.config.encoding_dim
         down_dim = self.config.d_kv * self.config.num_heads
         input_dim = self.config.d_model
-        self.adap_pooler = MyPooler(self.config.pooler_d_model, self.encoding_dim)
+        self.adap_pooler = MyPooler(
+            self.config.pooler_d_model, self.encoding_dim)
 
         self.hypernet = HyperNet(
             self.encoding_dim, input_dim, self.embedding_dim, down_dim)
 
         self.decoder_hypernet = HyperNet(
             self.encoding_dim, input_dim, self.embedding_dim, down_dim)
-        
+
         self.cross_hypernet = HyperNet(
             self.encoding_dim, input_dim, self.embedding_dim, down_dim)
-        
+
         if 'ko' in self.config.name:
             self.hypernet_ko = HyperNet(
                 self.encoding_dim, input_dim, self.embedding_dim, down_dim)
@@ -225,7 +246,7 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 self.encoding_dim, input_dim, self.embedding_dim, down_dim)
             self.cross_hypernet_ko = HyperNet(
                 self.encoding_dim, input_dim, self.embedding_dim, down_dim)
-            
+
         if 'hyfn' in self.config.name:
             self.ffn_en_hypernet_wi = HyperNet(
                 self.encoding_dim, input_dim, self.embedding_dim * 8, down_dim * 4)
@@ -235,9 +256,9 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 self.encoding_dim, input_dim, self.embedding_dim * 8, down_dim * 4)
             self.ffn_de_hypernet_wo = HyperNet(
                 self.encoding_dim, input_dim * 4, self.embedding_dim * 8, down_dim)
-            
+
         self.init_hyper()
-    
+
     def freeze_params(self):
         if 'hyperlora' in self.config.name:
             for layer in self.modules():
@@ -246,12 +267,15 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
         else:
             # All modules in the
             # modules_to_freeze = [self.model.encoder.encoder.block[i].layer[0] for i in range(len(self.model.encoder.encoder.block))]
-            modules_to_freeze = [l.module.layer[0] if hasattr(l, "module") else l.layer[0] for l in self.model.encoder.encoder.block]
+            modules_to_freeze = [l.module.layer[0] if hasattr(
+                l, "module") else l.layer[0] for l in self.model.encoder.encoder.block]
             # modules_to_freeze.extend([l.module.layer[1] if hasattr(l, "module") else l.layer[1] for l in self.model.encoder.encoder.block])
             # And the decoder modules, which has both a SelfAttention (layer[0])
-            modules_to_freeze.extend([self.model.decoder.block[i].layer[0] for i in range(len(self.model.decoder.block))])
+            modules_to_freeze.extend([self.model.decoder.block[i].layer[0] for i in range(
+                len(self.model.decoder.block))])
             # and CrossAttention (layer[1]) block
-            modules_to_freeze.extend([self.model.decoder.block[i].layer[1] for i in range(len(self.model.decoder.block))])
+            modules_to_freeze.extend([self.model.decoder.block[i].layer[1] for i in range(
+                len(self.model.decoder.block))])
             # modules_to_freeze.extend([self.model.decoder.block[i].layer[2] for i in range(len(self.model.decoder.block))])
             for module in modules_to_freeze:
                 for param in module.parameters():
@@ -265,59 +289,77 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 for x, param in layer.named_parameters():
                     if "wi" in x or "wo" in x:
                         param.requires_grad = True
-    
+
     def init_hyper(self):
         for i, l in enumerate(self.encoder.block):
             l = l.module if hasattr(l, "module") else l
-            l.layer[0].SelfAttention.q = HyperLora(l.layer[0].SelfAttention.q, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i)
+            l.layer[0].SelfAttention.q = HyperLora(
+                l.layer[0].SelfAttention.q, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i)
             if 'prefix' in self.config.name:
-                l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1, 
+                l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1,
                                                        self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
             else:
-                l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1)
+                l.layer[0].SelfAttention.v = HyperLora(
+                    l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1)
             if 'ko' in self.config.name:
                 if 'prefix' in self.config.name:
-                    l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i, 
+                    l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i,
                                                            self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
                 else:
-                    l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i)
-                l.layer[0].SelfAttention.o = HyperLora(l.layer[0].SelfAttention.o, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i+1)
+                    l.layer[0].SelfAttention.k = HyperLora(
+                        l.layer[0].SelfAttention.k, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i)
+                l.layer[0].SelfAttention.o = HyperLora(
+                    l.layer[0].SelfAttention.o, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i+1)
 
         for i, l in enumerate(self.decoder.block):
             l = l.module if hasattr(l, "module") else l
-            l.layer[0].SelfAttention.q = HyperLora(l.layer[0].SelfAttention.q, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i)
-            l.layer[1].EncDecAttention.q = HyperLora(l.layer[1].EncDecAttention.q, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i)
+            l.layer[0].SelfAttention.q = HyperLora(
+                l.layer[0].SelfAttention.q, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i)
+            l.layer[1].EncDecAttention.q = HyperLora(
+                l.layer[1].EncDecAttention.q, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i)
             if 'prefix' in self.config.name:
-                l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1, 
+                l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1,
                                                        self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
-                l.layer[1].EncDecAttention.v = HyperLora(l.layer[1].EncDecAttention.v, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i+1, 
+                l.layer[1].EncDecAttention.v = HyperLora(l.layer[1].EncDecAttention.v, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i+1,
                                                          self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
             else:
-                l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1)
-                l.layer[1].EncDecAttention.v = HyperLora(l.layer[1].EncDecAttention.v, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i+1)
+                l.layer[0].SelfAttention.v = HyperLora(
+                    l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1)
+                l.layer[1].EncDecAttention.v = HyperLora(
+                    l.layer[1].EncDecAttention.v, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i+1)
             if 'ko' in self.config.name:
                 if 'prefix' in self.config.name:
-                    l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i, 
+                    l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i,
                                                            self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
-                    l.layer[1].EncDecAttention.k = HyperLora(l.layer[1].EncDecAttention.k, self.cross_hypernet_ko.down_hypernet, self.cross_hypernet_ko.up_hypernet, 2*i, 
+                    l.layer[1].EncDecAttention.k = HyperLora(l.layer[1].EncDecAttention.k, self.cross_hypernet_ko.down_hypernet, self.cross_hypernet_ko.up_hypernet, 2*i,
                                                              self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
                 else:
-                    l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i)
-                    l.layer[1].EncDecAttention.k = HyperLora(l.layer[1].EncDecAttention.k, self.cross_hypernet_ko.down_hypernet, self.cross_hypernet_ko.up_hypernet, 2*i)
-                l.layer[0].SelfAttention.o = HyperLora(l.layer[0].SelfAttention.o, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i+1)
-                l.layer[1].EncDecAttention.o = HyperLora(l.layer[1].EncDecAttention.o, self.cross_hypernet_ko.down_hypernet, self.cross_hypernet_ko.up_hypernet, 2*i+1)
-            
+                    l.layer[0].SelfAttention.k = HyperLora(
+                        l.layer[0].SelfAttention.k, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i)
+                    l.layer[1].EncDecAttention.k = HyperLora(
+                        l.layer[1].EncDecAttention.k, self.cross_hypernet_ko.down_hypernet, self.cross_hypernet_ko.up_hypernet, 2*i)
+                l.layer[0].SelfAttention.o = HyperLora(
+                    l.layer[0].SelfAttention.o, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i+1)
+                l.layer[1].EncDecAttention.o = HyperLora(
+                    l.layer[1].EncDecAttention.o, self.cross_hypernet_ko.down_hypernet, self.cross_hypernet_ko.up_hypernet, 2*i+1)
+
         if 'hyfn' in self.config.name:
             for i, l in enumerate(self.encoder.block):
                 l = l.module if hasattr(l, "module") else l
-                l.layer[1].DenseReluDense.wi_0 = HyperLora(l.layer[1].DenseReluDense.wi_0, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i)
-                l.layer[1].DenseReluDense.wi_1 = HyperLora(l.layer[1].DenseReluDense.wi_1, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i+1)
-                l.layer[1].DenseReluDense.wo = HyperLora(l.layer[1].DenseReluDense.wo, self.ffn_en_hypernet_wo.down_hypernet, self.ffn_en_hypernet_wo.up_hypernet, i)
+                l.layer[1].DenseReluDense.wi_0 = HyperLora(
+                    l.layer[1].DenseReluDense.wi_0, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i)
+                l.layer[1].DenseReluDense.wi_1 = HyperLora(
+                    l.layer[1].DenseReluDense.wi_1, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i+1)
+                l.layer[1].DenseReluDense.wo = HyperLora(
+                    l.layer[1].DenseReluDense.wo, self.ffn_en_hypernet_wo.down_hypernet, self.ffn_en_hypernet_wo.up_hypernet, i)
             for i, l in enumerate(self.decoder.block):
                 l = l.module if hasattr(l, "module") else l
-                l.layer[2].DenseReluDense.wi_0 = HyperLora(l.layer[2].DenseReluDense.wi_0, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i)
-                l.layer[2].DenseReluDense.wi_1 = HyperLora(l.layer[2].DenseReluDense.wi_1, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i+1)
-                l.layer[2].DenseReluDense.wo = HyperLora(l.layer[2].DenseReluDense.wo, self.ffn_de_hypernet_wo.down_hypernet, self.ffn_de_hypernet_wo.up_hypernet, i)
+                l.layer[2].DenseReluDense.wi_0 = HyperLora(
+                    l.layer[2].DenseReluDense.wi_0, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i)
+                l.layer[2].DenseReluDense.wi_1 = HyperLora(
+                    l.layer[2].DenseReluDense.wi_1, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i+1)
+                l.layer[2].DenseReluDense.wo = HyperLora(
+                    l.layer[2].DenseReluDense.wo, self.ffn_de_hypernet_wo.down_hypernet, self.ffn_de_hypernet_wo.up_hypernet, i)
 
 
 class HyperParamNet(nn.Module):
@@ -349,13 +391,14 @@ class HyperParamNet(nn.Module):
     def set_features(self, features):
         self.features = features
         return
-    
+
     def set_prefixs(self, prefixs):
         self.prefixs = prefixs
         return
 
     def forward(self, features):
-        output = self.linear2(F.relu(self.linear1(features))).reshape(-1, self.dim, self.bottleneck)
+        output = self.linear2(F.relu(self.linear1(features))
+                              ).reshape(-1, self.dim, self.bottleneck)
         return output/self.scale
 
 
@@ -377,7 +420,8 @@ class HyperLora(nn.Module):
         self.prefix = False
         if prefix_length > 0:
             self.prefix = True
-            self.prefix_gen = MyPrefix(feature_size, prefix_length, src_length, target_size)
+            self.prefix_gen = MyPrefix(
+                feature_size, prefix_length, src_length, target_size)
 
     def forward(self, x):
         # Conditioning variable (either indicator or example)
@@ -385,7 +429,7 @@ class HyperLora(nn.Module):
         # Layer idx is added to conditioning variable
         if self.idx is not None:
             val = nn.functional.pad(val, (0, 1), value=self.idx)
-            
+
         val = val.to(torch.bfloat16)
         # Compute hypernet weights
         weight1 = self.hypernet1(val)
@@ -437,12 +481,13 @@ class HyperNet(nn.Module):
 class MyPrefix(nn.Module):
     def __init__(self, feature_size, prefix_length, src_length, target_size):
         super().__init__()
-        middle_size = 32
+        middle_size = 128
         self.target_size = target_size
-        self.down = nn.Linear(feature_size, middle_size)
-        self.maxpool = nn.MaxPool2d((src_length - prefix_length + 1, 1), stride=1)
-        # self.dense = nn.Linear(middle_size * src_length, prefix_length * middle_size)
-        self.up = nn.Linear(middle_size, target_size)
+        # self.maxpool = nn.MaxPool2d((src_length - prefix_length + 1, 1), stride=1)
+        self.dense = nn.Linear(src_length, prefix_length)
+        if feature_size != target_size:
+            self.down = nn.Linear(feature_size, middle_size)
+            self.up = nn.Linear(middle_size, target_size)
         # self.down = nn.Linear(feature_size, middle_size)
         # self.dense = nn.Linear(middle_size * src_length, prefix_length * middle_size)
         # self.up = nn.Linear(middle_size, target_size)
@@ -450,15 +495,18 @@ class MyPrefix(nn.Module):
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states = hidden_states.to(torch.bfloat16)
-        down_states = self.dropout(self.activation(self.down(hidden_states)))
-        flat_hidden_states = self.maxpool(down_states)
-        # flat_hidden_states = down_states.reshape(hidden_states.shape[0], -1)
-        # pooled_output = self.dense(flat_hidden_states)
-        # pooled_output = self.dropout(self.activation(pooled_output))
-        # nested_output = pooled_output.reshape(hidden_states.shape[0], -1, self.target_size)
-        up_states = self.dropout(self.activation(self.up(flat_hidden_states)))
-        return up_states
+        hidden_states = hidden_states.to(torch.bfloat16)  # b, l, h
+        # flat_hidden_states = self.maxpool(down_states)
+        flat_hidden_states = hidden_states.reshape(hidden_states.shape[0], hidden_states.shape[-1], -1)
+        pooled_output = self.dense(flat_hidden_states)
+        pooled_output = self.dropout(self.activation(pooled_output))
+        pooled_output = pooled_output.reshape(
+            hidden_states.shape[0], -1, hidden_states.shape[-1])
+        if hidden_states.shape[-1] != self.target_size:
+            down_states = self.activation(self.down(pooled_output))
+            pooled_output = self.dropout(self.activation(self.up(down_states)))
+        return pooled_output
+
 
 class MyPooler(nn.Module):
     def __init__(self, s_hidden_size, t_hidden_size):
@@ -473,7 +521,7 @@ class MyPooler(nn.Module):
         pooled_output = self.activation(pooled_output)
         nested_output = pooled_output.reshape(*hidden_states.shape[:-1], -1)
         return nested_output
-    
+
 
 class AdapterWrapper(nn.Module):
     """
@@ -502,10 +550,10 @@ class AdapterWrapper(nn.Module):
         if 'hyperlora' in self.args.name:
             self.decoder_hypernet = HyperNet(
                 self.encoding_dim, input_dim, self.embedding_dim, down_dim)
-            
+
             self.cross_hypernet = HyperNet(
                 self.encoding_dim, input_dim, self.embedding_dim, down_dim)
-        
+
         if 'hyfn' in self.args.name:
             self.ffn_en_hypernet_wi = HyperNet(
                 self.encoding_dim, input_dim, self.embedding_dim * 8, down_dim * 4)
@@ -515,9 +563,10 @@ class AdapterWrapper(nn.Module):
                 self.encoding_dim, input_dim, self.embedding_dim * 8, down_dim * 4)
             self.ffn_de_hypernet_wo = HyperNet(
                 self.encoding_dim, input_dim * 4, self.embedding_dim * 8, down_dim)
-        
+
         if weights is not None:
-            self.hypernet.load_state_dict(torch.load(weights, map_location=torch.device('cpu'), strict=False))
+            self.hypernet.load_state_dict(torch.load(
+                weights, map_location=torch.device('cpu'), strict=False))
             print("WEIGHTS LOADED")
 
         # self.earth_mover_loss = SamplesLoss(loss="sinkhorn", p=2)
@@ -540,12 +589,15 @@ class AdapterWrapper(nn.Module):
         else:
             # All modules in the
             # modules_to_freeze = [self.model.encoder.encoder.block[i].layer[0] for i in range(len(self.model.encoder.encoder.block))]
-            modules_to_freeze = [l.module.layer[0] if hasattr(l, "module") else l.layer[0] for l in self.model.encoder.encoder.block]
+            modules_to_freeze = [l.module.layer[0] if hasattr(
+                l, "module") else l.layer[0] for l in self.model.encoder.encoder.block]
             # modules_to_freeze.extend([l.module.layer[1] if hasattr(l, "module") else l.layer[1] for l in self.model.encoder.encoder.block])
             # And the decoder modules, which has both a SelfAttention (layer[0])
-            modules_to_freeze.extend([self.model.decoder.block[i].layer[0] for i in range(len(self.model.decoder.block))])
+            modules_to_freeze.extend([self.model.decoder.block[i].layer[0] for i in range(
+                len(self.model.decoder.block))])
             # and CrossAttention (layer[1]) block
-            modules_to_freeze.extend([self.model.decoder.block[i].layer[1] for i in range(len(self.model.decoder.block))])
+            modules_to_freeze.extend([self.model.decoder.block[i].layer[1] for i in range(
+                len(self.model.decoder.block))])
             # modules_to_freeze.extend([self.model.decoder.block[i].layer[2] for i in range(len(self.model.decoder.block))])
             for module in modules_to_freeze:
                 for param in module.parameters():
@@ -636,30 +688,39 @@ class AdapterWrapper(nn.Module):
         if include_original:
             inputs["original_embedding"] = original_embedding
             inputs["original_mask"] = original_mask
-        
+
         if not self.args.whitening:
             features = self.adap_pooler(features)
 
         self.model.instruction_input = instruction_input
         self.model.instruction_attention_mask = instruction_attention_mask
-        
+
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
         if 'hyperlora' in self.args.name:
-            self.decoder_hypernet.down_hypernet.set_features(self.emb(features))
+            self.decoder_hypernet.down_hypernet.set_features(
+                self.emb(features))
             self.decoder_hypernet.up_hypernet.set_features(self.emb(features))
             self.cross_hypernet.down_hypernet.set_features(self.emb(features))
             self.cross_hypernet.up_hypernet.set_features(self.emb(features))
         if 'hyfn' in self.args.name:
-            self.ffn_en_hypernet_wi.down_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wi.up_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wi.down_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wi.up_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wo.down_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wo.up_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wo.down_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wo.up_hypernet.set_features(self.emb(features))
-        
+            self.ffn_en_hypernet_wi.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wi.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wi.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wi.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wo.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wo.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wo.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wo.up_hypernet.set_features(
+                self.emb(features))
+
         outputs = self.model(**inputs)
 
         return outputs
@@ -667,30 +728,39 @@ class AdapterWrapper(nn.Module):
     def generate(self, input_ids, attention_mask, features=None, instruction_input=None, instruction_attention_mask=None, **kwargs):
         inputs = {"input_ids": input_ids,
                   "attention_mask": attention_mask, **kwargs}
-        
+
         if not self.args.whitening:
             features = self.adap_pooler(features)
-            
+
         self.model.instruction_input = instruction_input
         self.model.instruction_attention_mask = instruction_attention_mask
-        
+
         self.hypernet.down_hypernet.set_features(self.emb(features))
         self.hypernet.up_hypernet.set_features(self.emb(features))
         if 'hyperlora' in self.args.name:
-            self.decoder_hypernet.down_hypernet.set_features(self.emb(features))
+            self.decoder_hypernet.down_hypernet.set_features(
+                self.emb(features))
             self.decoder_hypernet.up_hypernet.set_features(self.emb(features))
             self.cross_hypernet.down_hypernet.set_features(self.emb(features))
             self.cross_hypernet.up_hypernet.set_features(self.emb(features))
         if 'hyfn' in self.args.name:
-            self.ffn_en_hypernet_wi.down_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wi.up_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wi.down_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wi.up_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wo.down_hypernet.set_features(self.emb(features))
-            self.ffn_en_hypernet_wo.up_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wo.down_hypernet.set_features(self.emb(features))
-            self.ffn_de_hypernet_wo.up_hypernet.set_features(self.emb(features))
-            
+            self.ffn_en_hypernet_wi.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wi.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wi.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wi.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wo.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_en_hypernet_wo.up_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wo.down_hypernet.set_features(
+                self.emb(features))
+            self.ffn_de_hypernet_wo.up_hypernet.set_features(
+                self.emb(features))
+
         return self.model.generate(**inputs)
 
 
@@ -701,25 +771,36 @@ class T5LoraWrapper(AdapterWrapper):
     def init_hypernet(self):
         for i, l in enumerate(self.model.encoder.block):
             l = l.module if hasattr(l, "module") else l
-            l.layer[0].SelfAttention.q = HyperLora(l.layer[0].SelfAttention.q, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i)
-            l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1)
+            l.layer[0].SelfAttention.q = HyperLora(
+                l.layer[0].SelfAttention.q, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i)
+            l.layer[0].SelfAttention.v = HyperLora(
+                l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1)
         if 'hyperlora' in self.args.name:
             for i, l in enumerate(self.model.decoder.block):
                 l = l.module if hasattr(l, "module") else l
-                l.layer[0].SelfAttention.q = HyperLora(l.layer[0].SelfAttention.q, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i)
-                l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1)
-                l.layer[1].EncDecAttention.q = HyperLora(l.layer[1].EncDecAttention.q, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i)
-                l.layer[1].EncDecAttention.v = HyperLora(l.layer[1].EncDecAttention.v, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i+1)
+                l.layer[0].SelfAttention.q = HyperLora(
+                    l.layer[0].SelfAttention.q, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i)
+                l.layer[0].SelfAttention.v = HyperLora(
+                    l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1)
+                l.layer[1].EncDecAttention.q = HyperLora(
+                    l.layer[1].EncDecAttention.q, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i)
+                l.layer[1].EncDecAttention.v = HyperLora(
+                    l.layer[1].EncDecAttention.v, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i+1)
         if 'hyfn' in self.args.name:
             for i, l in enumerate(self.model.encoder.block):
                 l = l.module if hasattr(l, "module") else l
-                l.layer[1].DenseReluDense.wi_0 = HyperLora(l.layer[1].DenseReluDense.wi_0, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i)
-                l.layer[1].DenseReluDense.wi_1 = HyperLora(l.layer[1].DenseReluDense.wi_1, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i+1)
-                l.layer[1].DenseReluDense.wo = HyperLora(l.layer[1].DenseReluDense.wo, self.ffn_en_hypernet_wo.down_hypernet, self.ffn_en_hypernet_wo.up_hypernet, i)
+                l.layer[1].DenseReluDense.wi_0 = HyperLora(
+                    l.layer[1].DenseReluDense.wi_0, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i)
+                l.layer[1].DenseReluDense.wi_1 = HyperLora(
+                    l.layer[1].DenseReluDense.wi_1, self.ffn_en_hypernet_wi.down_hypernet, self.ffn_en_hypernet_wi.up_hypernet, 2*i+1)
+                l.layer[1].DenseReluDense.wo = HyperLora(
+                    l.layer[1].DenseReluDense.wo, self.ffn_en_hypernet_wo.down_hypernet, self.ffn_en_hypernet_wo.up_hypernet, i)
             for i, l in enumerate(self.model.decoder.block):
                 l = l.module if hasattr(l, "module") else l
-                l.layer[2].DenseReluDense.wi_0 = HyperLora(l.layer[2].DenseReluDense.wi_0, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i)
-                l.layer[2].DenseReluDense.wi_1 = HyperLora(l.layer[2].DenseReluDense.wi_1, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i+1)
-                l.layer[2].DenseReluDense.wo = HyperLora(l.layer[2].DenseReluDense.wo, self.ffn_de_hypernet_wo.down_hypernet, self.ffn_de_hypernet_wo.up_hypernet, i)
+                l.layer[2].DenseReluDense.wi_0 = HyperLora(
+                    l.layer[2].DenseReluDense.wi_0, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i)
+                l.layer[2].DenseReluDense.wi_1 = HyperLora(
+                    l.layer[2].DenseReluDense.wi_1, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i+1)
+                l.layer[2].DenseReluDense.wo = HyperLora(
+                    l.layer[2].DenseReluDense.wo, self.ffn_de_hypernet_wo.down_hypernet, self.ffn_de_hypernet_wo.up_hypernet, i)
         self.freeze_params()
-
