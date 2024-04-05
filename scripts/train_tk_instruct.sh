@@ -38,8 +38,9 @@ custom=${18:-"0"}
 hyper=${19:-"0"}
 ko=${20:-"0"}
 prefix=${21:-"0"}
-dataset=${22:-"0"}
-do_sample=${23:-"0"}
+gpt=${22:-"0"}
+dataset=${23:-"0"}
+do_sample=${24:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
@@ -127,6 +128,11 @@ if [ "$tune" == "kd" ];then
         output_dir="${output_dir}_prefix${prefix}"
         lora="${lora}_prefix"
         extra_args="${extra_args} --prefix_length ${prefix}"
+        if [ "$gpt" == "gpt" ];then
+            name="${name}_gpt"
+            output_dir="${output_dir}_gpt"
+            lora="${lora}_gpt"
+        fi
     fi
     extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --kd True --s_num_pos_examples ${s_pos}"
     if [ "$prompt" == "fullprompt" ];then

@@ -16,6 +16,22 @@ from torchtyping import TensorType
 from typing import Optional
 import math
 import modeling_t5
+from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
+from typing_extensions import TypeAlias
+import jax.numpy as jnp
+from jax import lax
+from flax.linen import partitioning as nn_partitioning
+from flax import linen
+import functools
+import operator
+# Type annotations
+Array: TypeAlias = jnp.ndarray
+DType: TypeAlias = jnp.dtype
+PRNGKey: TypeAlias = jnp.ndarray
+Shape = Iterable[int]
+Activation = Callable[..., Array]
+# Parameter initializers.
+Initializer = Callable[[PRNGKey, Shape, DType], Array]
 
 
 class LoRAT5(modeling_t5.T5ForConditionalGeneration):
@@ -103,6 +119,32 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
             self.ffn_de_hypernet_wo.down_hypernet.set_prefixs(
                 self.emb(features))
             self.ffn_de_hypernet_wo.up_hypernet.set_prefixs(self.emb(features))
+            
+    def set_inputs(self, features):
+        self.hypernet.down_hypernet.set_inputs(features)
+        self.hypernet.up_hypernet.set_inputs(features)
+
+        self.decoder_hypernet.down_hypernet.set_inputs(features)
+        self.decoder_hypernet.up_hypernet.set_inputs(features)
+        self.cross_hypernet.down_hypernet.set_inputs(features)
+        self.cross_hypernet.up_hypernet.set_inputs(features)
+
+        if 'ko' in self.config.name:
+            self.hypernet_ko.down_hypernet.set_inputs(features)
+            self.hypernet_ko.up_hypernet.set_inputs(features)
+            self.decoder_hypernet_ko.down_hypernet.set_inputs(features)
+            self.decoder_hypernet_ko.up_hypernet.set_inputs(features)
+            self.cross_hypernet_ko.down_hypernet.set_inputs(features)
+            self.cross_hypernet_ko.up_hypernet.set_inputs(features)
+        if 'hyfn' in self.config.name:
+            self.ffn_en_hypernet_wi.down_hypernet.set_inputs(features)
+            self.ffn_en_hypernet_wi.up_hypernet.set_inputs(features)
+            self.ffn_de_hypernet_wi.down_hypernet.set_inputs(features)
+            self.ffn_de_hypernet_wi.up_hypernet.set_inputs(features)
+            self.ffn_en_hypernet_wo.down_hypernet.set_inputs(features)
+            self.ffn_en_hypernet_wo.up_hypernet.set_inputs(features)
+            self.ffn_de_hypernet_wo.down_hypernet.set_inputs(features)
+            self.ffn_de_hypernet_wo.up_hypernet.set_inputs(features)
 
     def forward(self, input_ids=None, attention_mask=None, labels=None, features=None,
                 instruction_input=None, instruction_attention_mask=None, original_mask=None,
@@ -135,7 +177,10 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
 
         self.set_features(features)
         if "prefix" in self.config.name:
-            self.set_prefixs(instruction_input)
+            if "gpt" in self.config.name:
+                self.set_inputs(instruction_input)
+            else:
+                self.set_prefixs(instruction_input)
 
         return super().forward(**inputs)
 
@@ -207,7 +252,7 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 l.layer[2].DenseReluDense.wi_1 = l.layer[2].DenseReluDense.wi_1.linear
                 l.layer[2].DenseReluDense.wo = l.layer[2].DenseReluDense.wo.linear
         for key in dir(self):
-            if 'hypernet' in key or 'pooler' in key or 'hyperencoder' in key:
+            if 'hypernet' in key or 'pooler' in key or 'hyperencoder' in key or 'prefix_gen' in key:
                 delattr(self, key)
 
     def wrap_lora(self):
@@ -221,6 +266,15 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 # cache_dir=model_args.cache_dir,
             ).encoder
             self.config.pooler_d_model = 768
+        if "gpt" in self.config.name:
+            self.prefix_gen = MyGPT2.from_pretrained(
+                'openai-community/gpt2',
+                torch_dtype=torch.bfloat16
+                # cache_dir=model_args.cache_dir,
+            )
+            self.prefix_gen._init_prompt(self.config.prefix_length, self.config.d_model)
+        else:
+            self.prefix_gen = None
         self.down_hypernet = None
         self.up_hypernet = None
         self.embedding_dim = self.config.embedding_dim
@@ -297,14 +351,14 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 l.layer[0].SelfAttention.q, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i)
             if 'prefix' in self.config.name:
                 l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1,
-                                                       self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
+                                                       self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model, self.prefix_gen)
             else:
                 l.layer[0].SelfAttention.v = HyperLora(
                     l.layer[0].SelfAttention.v, self.hypernet.down_hypernet, self.hypernet.up_hypernet, 2*i+1)
             if 'ko' in self.config.name:
                 if 'prefix' in self.config.name:
                     l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i,
-                                                           self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
+                                                           self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model, self.prefix_gen)
                 else:
                     l.layer[0].SelfAttention.k = HyperLora(
                         l.layer[0].SelfAttention.k, self.hypernet_ko.down_hypernet, self.hypernet_ko.up_hypernet, 2*i)
@@ -319,9 +373,9 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                 l.layer[1].EncDecAttention.q, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i)
             if 'prefix' in self.config.name:
                 l.layer[0].SelfAttention.v = HyperLora(l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1,
-                                                       self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
+                                                       self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model, self.prefix_gen)
                 l.layer[1].EncDecAttention.v = HyperLora(l.layer[1].EncDecAttention.v, self.cross_hypernet.down_hypernet, self.cross_hypernet.up_hypernet, 2*i+1,
-                                                         self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
+                                                         self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model, self.prefix_gen)
             else:
                 l.layer[0].SelfAttention.v = HyperLora(
                     l.layer[0].SelfAttention.v, self.decoder_hypernet.down_hypernet, self.decoder_hypernet.up_hypernet, 2*i+1)
@@ -330,9 +384,9 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
             if 'ko' in self.config.name:
                 if 'prefix' in self.config.name:
                     l.layer[0].SelfAttention.k = HyperLora(l.layer[0].SelfAttention.k, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i,
-                                                           self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
+                                                           self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model, self.prefix_gen)
                     l.layer[1].EncDecAttention.k = HyperLora(l.layer[1].EncDecAttention.k, self.cross_hypernet_ko.down_hypernet, self.cross_hypernet_ko.up_hypernet, 2*i,
-                                                             self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model)
+                                                             self.config.pooler_d_model, self.config.prefix_length, self.config.max_source_length, self.config.d_model, self.prefix_gen)
                 else:
                     l.layer[0].SelfAttention.k = HyperLora(
                         l.layer[0].SelfAttention.k, self.decoder_hypernet_ko.down_hypernet, self.decoder_hypernet_ko.up_hypernet, 2*i)
@@ -360,6 +414,220 @@ class LoRAT5(modeling_t5.T5ForConditionalGeneration):
                     l.layer[2].DenseReluDense.wi_1, self.ffn_de_hypernet_wi.down_hypernet, self.ffn_de_hypernet_wi.up_hypernet, 2*i+1)
                 l.layer[2].DenseReluDense.wo = HyperLora(
                     l.layer[2].DenseReluDense.wo, self.ffn_de_hypernet_wo.down_hypernet, self.ffn_de_hypernet_wo.up_hypernet, i)
+
+
+class MyGPT2(transformers.GPT2Model):
+
+    def _init_prompt(self, d_len, hidden_size):
+        hypernet = nn.Embedding(d_len, hidden_size)
+        hypernet.weight.data.normal_(mean=0.0)
+        self.init_prompt_weight = hypernet(torch.arange(0, d_len))
+    
+    def forward(
+            self,
+            input_ids: Optional[torch.LongTensor] = None,
+            past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
+            attention_mask: Optional[torch.FloatTensor] = None,
+            token_type_ids: Optional[torch.LongTensor] = None,
+            position_ids: Optional[torch.LongTensor] = None,
+            head_mask: Optional[torch.FloatTensor] = None,
+            inputs_embeds: Optional[torch.FloatTensor] = None,
+            encoder_hidden_states: Optional[torch.Tensor] = None,
+            encoder_attention_mask: Optional[torch.FloatTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
+            demo_token_type_ids=None,
+            **kwargs
+    ):
+        if hasattr(self, "init_prompt_weight"):
+            distill_embeds = self.init_prompt_weight.unsqueeze(0).expand(input_ids.shape[0], -1, -1).to(input_ids.device)
+            inputs_embeds = torch.cat([self.get_input_embeddings()(input_ids.int()), distill_embeds], dim=1).to(torch.bfloat16)
+            attention_mask = torch.cat(
+                [attention_mask, attention_mask.new_ones(distill_embeds.shape[0], distill_embeds.shape[1])], dim=-1).to(torch.bfloat16)
+        else:
+            inputs_embeds = self.get_input_embeddings()(input_ids)
+        
+        last_hidden_states = super().forward(
+            None,
+            past_key_values,
+            attention_mask,
+            token_type_ids,
+            position_ids,
+            head_mask,
+            inputs_embeds,
+            encoder_hidden_states,
+            encoder_attention_mask,
+            use_cache,
+            output_attentions,
+            output_hidden_states=True).last_hidden_state
+
+        if hasattr(self, "init_prompt_weight"):
+            distill_embeds_shape = self.init_prompt_weight.shape
+            last_hidden_states = last_hidden_states[:, -distill_embeds_shape[0]:, :]
+            attention_mask = attention_mask[:, -distill_embeds_shape[0]:]
+        return last_hidden_states
+
+def hypernetwork(output, name, emb_dim, activations=('relu',)):
+    # if cfg.per_layer_hnet:
+    #     output *= cfg.num_encoder_layers + 2 * cfg.num_decoder_layers
+    return MlpBlock(
+        intermediate_dim=emb_dim,  # same size as model
+        output_dim=output,
+        activations=activations,
+        dtype='bfloat16',
+        name=name,
+    )
+
+# from flax.linen.partitioning import param_with_axes, with_sharding_constraint
+param_with_axes = nn_partitioning.param_with_axes
+with_sharding_constraint = nn_partitioning.with_sharding_constraint
+
+
+def _normalize_axes(axes: Iterable[int], ndim: int) -> Tuple[int]:
+    # A tuple by convention. len(axes_tuple) then also gives the rank efficiently.
+    return tuple([ax if ax >= 0 else ndim + ax for ax in axes])
+
+
+def _canonicalize_tuple(x):
+    if isinstance(x, Iterable):
+        return tuple(x)
+    else:
+        return (x,)
+
+
+def _convert_to_activation_function(
+    fn_or_string: Union[str, Callable]
+) -> Callable:
+    """Convert a string to an activation function."""
+    if fn_or_string == 'linear':
+        return lambda x: x
+    elif isinstance(fn_or_string, str):
+        return getattr(linen, fn_or_string)
+    elif callable(fn_or_string):
+        return fn_or_string
+    else:
+        raise ValueError(
+            "don't know how to convert %s to an activation function"
+            % (fn_or_string,)
+        )
+
+# ------------------------------------------------------------------------------
+# DenseGeneral for attention layers.
+# ------------------------------------------------------------------------------
+
+class DenseGeneral(linen.Module):
+    """A linear transformation (without bias) with flexible axes.
+
+    Attributes:
+      features: tuple with numbers of output features.
+      axis: tuple with axes to apply the transformation on.
+      dtype: the dtype of the computation (default: float32).
+      kernel_init: initializer function for the weight matrix.
+    """
+
+    features: Union[Iterable[int], int]
+    axis: Union[Iterable[int], int] = -1
+    dtype: DType = jnp.float32
+    kernel_init: Initializer = linen.initializers.variance_scaling(
+        1.0, 'fan_in', 'truncated_normal'
+    )
+    kernel_axes: Tuple[str, ...] = ()
+
+    @linen.compact
+    def __call__(self, inputs: Array) -> Array:
+        """Applies a linear transformation to the inputs along multiple dimensions.
+
+        Args:
+          inputs: The nd-array to be transformed.
+
+        Returns:
+          The transformed input.
+        """
+        features = _canonicalize_tuple(self.features)
+        axis = _canonicalize_tuple(self.axis)
+
+        inputs = jnp.asarray(inputs, self.dtype)
+        axis = _normalize_axes(axis, inputs.ndim)
+
+        kernel_shape = tuple([inputs.shape[ax] for ax in axis]) + features
+        kernel_param_shape = (
+            np.prod([inputs.shape[ax] for ax in axis]),
+            np.prod(features),
+        )
+        kernel = param_with_axes(
+            'kernel',
+            self.kernel_init,
+            kernel_param_shape,
+            jnp.float32,
+            axes=self.kernel_axes,
+        )
+        kernel = jnp.asarray(kernel, self.dtype)
+        kernel = jnp.reshape(kernel, kernel_shape)
+
+        contract_ind = tuple(range(0, len(axis)))
+        return lax.dot_general(inputs, kernel, ((axis, contract_ind), ((), ())))
+
+
+class MlpBlock(linen.Module):
+    """Transformer MLP / feed-forward block.
+
+    Attributes:
+      intermediate_dim: Shared dimension of hidden layers.
+      activations: Type of activations for each layer.  Each element is either
+        'linear', a string function name in flax.linen, or a function.
+      kernel_init: Kernel function, passed to the dense layers.
+      deterministic: Whether the dropout layers should be deterministic.
+      intermediate_dropout_rate: Dropout rate used after the intermediate layers.
+      dtype: Type for the dense layer.
+    """
+    intermediate_dim: int = 2048
+    output_dim: Optional[int] = None  # by default we preserve the input dim
+    activations: Sequence[Union[str, Callable]] = ("relu",)
+    kernel_init: Initializer = linen.initializers.variance_scaling(
+        1.0, "fan_in", "truncated_normal")
+    intermediate_dropout_rate: float = 0.1
+    dtype: Any = jnp.float32
+
+    @linen.compact
+    def __call__(self, inputs, decode: bool = False, deterministic: bool = False):
+        """Applies Transformer MlpBlock module."""
+        # Iterate over specified MLP input activation functions.
+        # e.g. ('relu',) or ('gelu', 'linear') for gated-gelu.
+        activations = []
+        for idx, act_fn in enumerate(self.activations):
+            dense_name = "wi" if len(self.activations) == 1 else f"wi_{idx}"
+            x = DenseGeneral(
+                self.intermediate_dim,
+                dtype=self.dtype,
+                kernel_init=self.kernel_init,
+                kernel_axes=("embed", "mlp"),
+                name=dense_name,
+            )(inputs)
+            x = _convert_to_activation_function(act_fn)(x)
+            activations.append(x)
+
+        # Take elementwise product of above intermediate activations.
+        x = functools.reduce(operator.mul, activations)
+        # Apply dropout and final dense output projection.
+        x = linen.Dropout(rate=self.intermediate_dropout_rate, broadcast_dims=(-2,))(
+            x, deterministic=deterministic
+        )  # Broadcast along length.
+
+        # CHANGE from t5x
+        # Removing the sharding constraint as we require to use this layer for shapes of ('batch', 'mlp'),
+        # which makes below constraint invalid.
+        # x = with_sharding_constraint(x, ('batch', 'length', 'mlp'))
+
+        output = DenseGeneral(
+            inputs.shape[-1] if self.output_dim is None else self.output_dim,
+            dtype=self.dtype,
+            kernel_init=self.kernel_init,
+            kernel_axes=("mlp", "embed"),
+            name="wo",
+        )(x)
+        return output
 
 
 class HyperParamNet(nn.Module):
@@ -395,10 +663,13 @@ class HyperParamNet(nn.Module):
     def set_prefixs(self, prefixs):
         self.prefixs = prefixs
         return
+    
+    def set_inputs(self, inputs):
+        self.inputs = inputs
+        return
 
     def forward(self, features):
-        output = self.linear2(F.relu(self.linear1(features))
-                              ).reshape(-1, self.dim, self.bottleneck)
+        output = self.linear2(F.relu(self.linear1(features))).reshape(-1, self.dim, self.bottleneck)
         return output/self.scale
 
 
@@ -407,7 +678,7 @@ class HyperLora(nn.Module):
     Simple MLP Hypernet
     """
 
-    def __init__(self, linear: nn.Module, hypernet1=None, hypernet2=None, idx=0, feature_size=0, prefix_length=0, src_length=0, target_size=0):
+    def __init__(self, linear: nn.Module, hypernet1=None, hypernet2=None, idx=0, feature_size=0, prefix_length=0, src_length=0, target_size=0, prefix_gen=None):
         super().__init__()
 
         self.linear = linear
@@ -418,8 +689,12 @@ class HyperLora(nn.Module):
         self.idx = idx
         # prefix
         self.prefix = False
+        self.gpt = False
         if prefix_length > 0:
             self.prefix = True
+            self.gpt = prefix_gen is not None
+            # self.prefix_gen = hypernetwork(
+            #     target_size * prefix_length, "prefix", feature_size) if prefix_gen is None else prefix_gen
             self.prefix_gen = MyPrefix(
                 feature_size, prefix_length, src_length, target_size)
 
@@ -442,6 +717,7 @@ class HyperLora(nn.Module):
         out = self.dropout(self.linear(x))
         out = torch.matmul(torch.matmul(x, weight1), weight2) + out
         if self.prefix:
+            # **self.hypernet1.inputs if self.gpt else self.hypernet1.prefixs
             prefix = self.prefix_gen(self.hypernet1.prefixs)
             out = torch.cat((prefix, out), dim=1)
         return out
@@ -485,26 +761,29 @@ class MyPrefix(nn.Module):
         self.target_size = target_size
         # self.maxpool = nn.MaxPool2d((src_length - prefix_length + 1, 1), stride=1)
         self.dense = nn.Linear(src_length, prefix_length)
-        if feature_size != target_size:
-            self.down = nn.Linear(feature_size, middle_size)
-            self.up = nn.Linear(middle_size, target_size)
+        # if feature_size != target_size:
+        self.down = nn.Linear(feature_size, middle_size)
+        self.up = nn.Linear(middle_size, target_size)
         # self.down = nn.Linear(feature_size, middle_size)
         # self.dense = nn.Linear(middle_size * src_length, prefix_length * middle_size)
         # self.up = nn.Linear(middle_size, target_size)
-        self.activation = nn.Tanh()
+        self.layernorm = nn.LayerNorm(target_size)
         self.dropout = nn.Dropout(0.1)
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, mask=None) -> torch.Tensor:
         hidden_states = hidden_states.to(torch.bfloat16)  # b, l, h
         # flat_hidden_states = self.maxpool(down_states)
-        flat_hidden_states = hidden_states.reshape(hidden_states.shape[0], hidden_states.shape[-1], -1)
+        down_states = self.down(hidden_states)
+        flat_hidden_states = down_states.reshape(
+            hidden_states.shape[0], down_states.shape[-1], -1)
         pooled_output = self.dense(flat_hidden_states)
-        pooled_output = self.dropout(self.activation(pooled_output))
         pooled_output = pooled_output.reshape(
-            hidden_states.shape[0], -1, hidden_states.shape[-1])
-        if hidden_states.shape[-1] != self.target_size:
-            down_states = self.activation(self.down(pooled_output))
-            pooled_output = self.dropout(self.activation(self.up(down_states)))
+            hidden_states.shape[0], -1, down_states.shape[-1])
+        pooled_output = self.layernorm(self.up(pooled_output))
+        pooled_output = self.dropout(F.relu(pooled_output))
+        # if hidden_states.shape[-1] != self.target_size:
+        #     down_states = self.activation(self.down(pooled_output))
+        #     pooled_output = self.dropout(self.activation(self.up(down_states)))
         return pooled_output
 
 

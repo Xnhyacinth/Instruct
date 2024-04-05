@@ -562,7 +562,6 @@ class T5Attention(nn.Module):
             outputs = outputs + (attn_weights,)
         return outputs
 
-
 class T5LayerSelfAttention(nn.Module):
     def __init__(self, config, has_relative_attention_bias=False):
         super().__init__()

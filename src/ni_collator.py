@@ -223,7 +223,7 @@ class DataCollatorForNI:
                     prefixs_inputs = self.tokenizer(
                         prefixs,
                         max_length=self.max_source_length,
-                        padding=self.padding if not self.args.prefix_length > 0 else "max_length",
+                        padding="max_length" if self.args.prefix_length > 0 and not 'gpt' in self.args.name else self.padding,
                         return_tensors=self.return_tensors,
                         truncation=True,
                         pad_to_multiple_of=self.pad_to_multiple_of
@@ -288,4 +288,7 @@ class DataCollatorForNI:
                 if self.args.prefix_length > 0 or self.args.custom_model:
                     model_inputs["instruction_input"] = torch.Tensor(instruction_inputs)
                     model_inputs["instruction_attention_mask"] = torch.Tensor(attention_masks)
+                if "gpt" in self.args.name:
+                    model_inputs["instruction_input"] = prefixs_inputs.to('cpu')
+
             return t_model_inputs, model_inputs

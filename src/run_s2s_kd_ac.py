@@ -53,9 +53,11 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
-from Instruct.encdec.config import FiDConfig
+from Instruct.encdec.config import FiDConfig, SingleTaskConfig
 from Instruct.encdec.data_fid import FiDPretrainDataForEncDec
-from Instruct.encdec.utils import expand_dataset_to_prompts, load_dataset_names
+from Instruct.encdec.data_t0singletask import T0SingleTaskDataForEncDec
+from Instruct.encdec.utils import expand_dataset_to_prompts, load_dataset_names, map_prompt_name_to_task_name
+from Instruct.encdec.task_configs.t0_config import split_infos
 from model import T5LoraWrapper, LoRAT5
 from ni_collator import DataCollatorForNI
 from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
@@ -250,6 +252,15 @@ class DataTrainingArguments:
     task_dir: str = field(
         default=None, metadata={"help": "The directory for saving the NaturalInstructions tasks json files."}
     )
+    config_files: str = field(
+        default=None, metadata={"help": "The config for P3 tasks json files."}
+    )
+    eval_config_files: str = field(
+        default=None, metadata={"help": "The eval config for P3 tasks json files."}
+    )
+    kwargs: str = field(
+        default=None, metadata={"help": "The kwargs for P3 tasks json files."}
+    )
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
     )
@@ -391,7 +402,14 @@ def main():
             json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-
+    raw_datasets = load_dataset(
+            "src/p3_dataset.py", 
+            data_dir=data_args.data_dir, 
+            task_dir=data_args.task_dir, 
+            cache_dir=model_args.cache_dir,
+            max_num_instances_per_task=data_args.max_num_instances_per_task,
+            max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
+        )
     checkpointpath = Path(training_args.output_dir)
     checkpointpath.mkdir(parents=True, exist_ok=True)
     with open(checkpointpath / 'options.txt', 'w') as o:
@@ -453,6 +471,36 @@ def main():
     set_seed(training_args.seed)
     # Get the NaturalInstructions dataset
     if "p3" in data_args.data_dir:
+        def load_evaldataset():
+            config = SingleTaskConfig(data_args.eval_config_files, data_args.kwargs)
+            # get prompt data
+            prompt_identifiers = load_dataset_names(config.task, "eval")
+            datasets = load_dataset_names(config.task, "eval_datasets")
+
+            # df = pd.DataFrame(columns=["task_name", "prompt_name", "performance", "eval_mode"])
+            results_file = os.path.join(config.out_dir, "results_{}.csv".format(config.task))
+
+            for i, prompt in enumerate(prompt_identifiers):
+                # logger.info("Evaluation {}/{}".format(i, len(prompt_identifiers)))
+
+                # map prompt name to the original task name (for better result aggregation)
+                task_name = map_prompt_name_to_task_name(prompt, datasets)
+
+                # figure out the evaluation mode (generation or rank classification)
+                # story_cloze is not in that `t0_config.py` list
+                config.eval_mode = "rank_classification" if task_name == "story_cloze" or "answer_choices" in split_infos[prompt]["features"] else "generation"
+
+                # data
+                eval_data = T0SingleTaskDataForEncDec(
+                    logger = logger,
+                    config = config,
+                    tokenizer = tokenizer,
+                    dataset = prompt,
+                    data_split = "valid",
+                    is_training = False
+                )
+                eval_data.load_raw_data()
+                eval_data.load_dataset(use_cache=False)
         data_config = FiDConfig(data_args.config_files, data_args.kwargs)
         # get prompt data
         datasets = load_dataset_names("t0", "train")
@@ -468,7 +516,6 @@ def main():
         )
         train_data.load_raw_data()
         train_data.load_dataset()
-        train_data.load_dataloader()
     else:
         raw_datasets = load_dataset(
             "src/ni_dataset.py", 
