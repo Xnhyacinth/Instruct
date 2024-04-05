@@ -16,6 +16,7 @@ from torchtyping import TensorType
 from typing import Optional
 import math
 import modeling_t5
+from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
 
 
 class LoRAT5(modeling_t5.T5ForConditionalGeneration):
