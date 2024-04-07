@@ -3,6 +3,7 @@ import random
 import string
 import torch
 from transformers.data.data_collator import *
+from promptsource.templates import DatasetTemplates
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,15 @@ class DataCollatorForP3:
             if self.kd:
                 prefixs, instances, s_sources = [], [], []
             for instance in batch:
+                if 'anli' in instance['Task']:
+                    prompts = DatasetTemplates('anli', None)
+                else:
+                    prompts = DatasetTemplates(
+                        f"{args.dataset_name}"
+                        if args.dataset_config_name is None
+                        else f"{args.dataset_name}/{args.dataset_config_name}"
+                    )
+                template = prompts[args.template_name]
                 task_input = ""
                 # add the input first.
                 task_input += "Now complete the following example -\n"

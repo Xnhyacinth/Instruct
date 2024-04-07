@@ -433,8 +433,8 @@ def main():
             "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
             f"`{model.__class__.__name__}`. This will lead to loss being calculated twice and will take up more memory"
         )
-    raw_datasets['train'] = raw_datasets['train'].select(range(200))
-    raw_datasets['test'] = raw_datasets['test'].select(range(10))
+    # raw_datasets['train'] = raw_datasets['train'].select(range(200))
+    # raw_datasets['test'] = raw_datasets['test'].select(range(10))
     if training_args.do_train:
         if "train" not in raw_datasets:
             raise ValueError("--do_train requires a train dataset")
