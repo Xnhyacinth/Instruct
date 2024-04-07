@@ -53,11 +53,11 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
-from Instruct.encdec.config import FiDConfig, SingleTaskConfig
-from Instruct.encdec.data_fid import FiDPretrainDataForEncDec
-from Instruct.encdec.data_t0singletask import T0SingleTaskDataForEncDec
-from Instruct.encdec.utils import expand_dataset_to_prompts, load_dataset_names, map_prompt_name_to_task_name
-from Instruct.encdec.task_configs.t0_config import split_infos
+from encdec.config import FiDConfig, SingleTaskConfig
+from encdec.data_fid import FiDPretrainDataForEncDec
+from encdec.data_t0singletask import T0SingleTaskDataForEncDec
+from encdec.utils import expand_dataset_to_prompts, load_dataset_names, map_prompt_name_to_task_name
+from encdec.task_configs.t0_config import split_infos
 from model import T5LoraWrapper, LoRAT5
 from ni_collator import DataCollatorForNI
 from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
@@ -402,14 +402,21 @@ def main():
             json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    # get prompt data
+    datasets = load_dataset_names("t0", "train")
+    prompt_identifiers = expand_dataset_to_prompts(datasets)
+
     raw_datasets = load_dataset(
-            "src/p3_dataset.py", 
-            data_dir=data_args.data_dir, 
-            task_dir=data_args.task_dir, 
-            cache_dir=model_args.cache_dir,
-            max_num_instances_per_task=data_args.max_num_instances_per_task,
-            max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
-        )
+        "src/p3_dataset.py",
+        dataset_list=prompt_identifiers,
+        data_dir=data_args.data_dir,
+        task_dir=data_args.task_dir,
+        cache_dir=model_args.cache_dir,
+        max_num_instances_per_task=data_args.max_num_instances_per_task,
+        max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
+    )
+    import pdb
+    pdb.set_trace()
     checkpointpath = Path(training_args.output_dir)
     checkpointpath.mkdir(parents=True, exist_ok=True)
     with open(checkpointpath / 'options.txt', 'w') as o:
@@ -472,13 +479,15 @@ def main():
     # Get the NaturalInstructions dataset
     if "p3" in data_args.data_dir:
         def load_evaldataset():
-            config = SingleTaskConfig(data_args.eval_config_files, data_args.kwargs)
+            config = SingleTaskConfig(
+                data_args.eval_config_files, data_args.kwargs)
             # get prompt data
             prompt_identifiers = load_dataset_names(config.task, "eval")
             datasets = load_dataset_names(config.task, "eval_datasets")
 
             # df = pd.DataFrame(columns=["task_name", "prompt_name", "performance", "eval_mode"])
-            results_file = os.path.join(config.out_dir, "results_{}.csv".format(config.task))
+            results_file = os.path.join(
+                config.out_dir, "results_{}.csv".format(config.task))
 
             for i, prompt in enumerate(prompt_identifiers):
                 # logger.info("Evaluation {}/{}".format(i, len(prompt_identifiers)))
@@ -488,16 +497,17 @@ def main():
 
                 # figure out the evaluation mode (generation or rank classification)
                 # story_cloze is not in that `t0_config.py` list
-                config.eval_mode = "rank_classification" if task_name == "story_cloze" or "answer_choices" in split_infos[prompt]["features"] else "generation"
+                config.eval_mode = "rank_classification" if task_name == "story_cloze" or "answer_choices" in split_infos[
+                    prompt]["features"] else "generation"
 
                 # data
                 eval_data = T0SingleTaskDataForEncDec(
-                    logger = logger,
-                    config = config,
-                    tokenizer = tokenizer,
-                    dataset = prompt,
-                    data_split = "valid",
-                    is_training = False
+                    logger=logger,
+                    config=config,
+                    tokenizer=tokenizer,
+                    dataset=prompt,
+                    data_split="valid",
+                    is_training=False
                 )
                 eval_data.load_raw_data()
                 eval_data.load_dataset(use_cache=False)
@@ -505,22 +515,22 @@ def main():
         # get prompt data
         datasets = load_dataset_names("t0", "train")
         prompt_identifiers = expand_dataset_to_prompts(datasets)
-        
+
         train_data = FiDPretrainDataForEncDec(
-            logger = logger,
-            config = data_config,
-            tokenizer = tokenizer,
-            datasets = prompt_identifiers,
-            data_split = "train",
-            is_training = True
+            logger=logger,
+            config=data_config,
+            tokenizer=tokenizer,
+            datasets=prompt_identifiers,
+            data_split="train",
+            is_training=True
         )
         train_data.load_raw_data()
         train_data.load_dataset()
     else:
         raw_datasets = load_dataset(
-            "src/ni_dataset.py", 
-            data_dir=data_args.data_dir, 
-            task_dir=data_args.task_dir, 
+            "src/ni_dataset.py",
+            data_dir=data_args.data_dir,
+            task_dir=data_args.task_dir,
             cache_dir=model_args.cache_dir,
             max_num_instances_per_task=data_args.max_num_instances_per_task,
             max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
@@ -568,6 +578,7 @@ def main():
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
+        model_args.name = model.config.name
     else:
         model_cls = model_cls.from_pretrained(
             model_args.model_name_or_path,

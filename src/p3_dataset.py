@@ -21,6 +21,7 @@ import json
 import os
 import random
 import datasets
+from t0.t0_config import DATA_SPLITS_SIZES, FID_METADATA, eval
 
 logger = datasets.logging.get_logger(__name__)
 
@@ -43,9 +44,10 @@ through an iterative peer review process to ensure their quality.
 _URL = "https://instructions.apps.allenai.org/"
 
 class P3Config(datasets.BuilderConfig):
-    def __init__(self, *args, task_dir=None, max_num_instances_per_task=None, max_num_instances_per_eval_task=None, **kwargs):
+    def __init__(self, *args, dataset_list=None, task_dir=None, max_num_instances_per_task=None, max_num_instances_per_eval_task=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.task_dir: str = task_dir
+        self.dataset_list = dataset_list
         self.max_num_instances_per_task: int = max_num_instances_per_task
         self.max_num_instances_per_eval_task: int = max_num_instances_per_eval_task
 
@@ -67,12 +69,14 @@ class P3(datasets.GeneratorBasedBuilder):
                 {
                     "id": datasets.Value("string"),
                     "Task": datasets.Value("string"),
-                    # "Instances": [{
-                    #     "input": datasets.Value("string"),
-                    #     "output": [datasets.Value("string")]
-                    # }],
-                    "input": datasets.Value("string"),
-                    "output": datasets.Value("string"),
+                    "Instance": {
+                        "id": datasets.Value("string"),
+                        "input": datasets.Value("string"),
+                        "output": [datasets.Value("string")],
+                        "options": [datasets.Value("string")],
+                    },
+                    # "input": datasets.Value("string"),
+                    # "output": datasets.Value("string"),
                 }
             ),
             supervised_keys=None,
@@ -89,37 +93,36 @@ class P3(datasets.GeneratorBasedBuilder):
 
         split_dir = self.config.data_dir
         task_dir = self.config.task_dir
+        dataset_list = self.config.dataset_list
 
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
                 gen_kwargs={
                     # "path": os.path.join(split_dir, "train_tasks.txt"), 
-                    "tasks": tasks,
+                    "tasks": dataset_list,
                     "task_dir": task_dir, 
                     "max_num_instances_per_task": self.config.max_num_instances_per_task,
                     "subset": "train"
                 }),
-            datasets.SplitGenerator(
-                name=datasets.Split.VALIDATION,
-                gen_kwargs={
-                    # "path": os.path.join(split_dir, "dev_tasks.txt"),
-                    "tasks": ["super_glue_wsc.fixed", "winogrande_winogrande_xl", "super_glue_cb", 
-                              "super_glue_rte", "anli", "super_glue_copa", "hellaswag", "super_glue_wic"],
-                    "task_dir": task_dir,
-                    "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
-                    "subset": "dev"
-                }),
-            datasets.SplitGenerator(
-                name=datasets.Split.TEST,
-                gen_kwargs={
-                    # "path": os.path.join(split_dir, "test_tasks.txt"), 
-                    "tasks": ["super_glue_wsc.fixed", "winogrande_winogrande_xl", "super_glue_cb", 
-                              "super_glue_rte", "anli", "super_glue_copa", "hellaswag", "super_glue_wic"],
-                    "task_dir": task_dir, 
-                    "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
-                    "subset": "test"
-                }),
+            # datasets.SplitGenerator(
+            #     name=datasets.Split.VALIDATION,
+            #     gen_kwargs={
+            #         # "path": os.path.join(split_dir, "dev_tasks.txt"),
+            #         "tasks": [],
+            #         "task_dir": task_dir,
+            #         "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
+            #         "subset": "dev"
+            #     }),
+            # datasets.SplitGenerator(
+            #     name=datasets.Split.TEST,
+            #     gen_kwargs={
+            #         # "path": os.path.join(split_dir, "test_tasks.txt"), 
+            #         "tasks": [],#eval
+            #         "task_dir": split_dir, 
+            #         "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
+            #         "subset": "test"
+            #     }),
         ]
 
     def _generate_examples(self, tasks=None, task_dir=None, max_num_instances_per_task=None, subset=None):
@@ -136,6 +139,7 @@ class P3(datasets.GeneratorBasedBuilder):
                 task_data["Task"] = task_name
                 if "Instruction Source" in task_data:
                     task_data.pop("Instruction Source")
+
                 all_instances = task_data.pop("Instances")
                 if subset == "test":
                     # for testing tasks, 100 instances are selected for efficient evaluation and they are label-balanced.
@@ -149,7 +153,16 @@ class P3(datasets.GeneratorBasedBuilder):
                     instances = instances[:max_num_instances_per_task]
                 for idx, instance in enumerate(instances):
                     example = task_data.copy()
+                    instance["id"] = str(instance["id"])
                     example["id"] = instance["id"]
                     example["Instance"] = instance
+                    if subset == "train":
+                        example["Instance"]["input"] = list(map(lambda x:str(x), example["Instance"]["input"]))
+                        example["Instance"]["input"] = ','.join(example["Instance"]["input"])
+                        example["Instance"]["output"] = list(map(lambda x:str(x), example["Instance"]["output"]))
+                        example["Instance"]["output"] = [','.join(example["Instance"]["output"])]
+                    if 'options' not in example['Instance']:
+                        example['Instance']['options'] = []
+
                     yield f"{task_name}_{idx}", example
 

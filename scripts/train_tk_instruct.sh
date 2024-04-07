@@ -47,6 +47,7 @@ name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
 output_dir=output_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}
 extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
+task_dir=data/tasks
 run_file=run_s2s.py
 if [ "$e" == "eval" ];then
     cache="./cache_eval"
@@ -58,9 +59,11 @@ if [ "$e" == "eval" ];then
 fi
 if [ "$dataset" == "p3" ];then
     config_files=0
-    data_dir=data/splits/1
-    name="${name}_1"
-    output_dir="${output_dir}_1"
+    data_dir=data_dict
+    task_dir=data_dict
+    name=experiment_p3_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
+    output_dir=output_p3_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}
+    run_file=run_s2s_kd_ac.py
 fi
 if [ "$tune" != "full" ];then
     name="${name}-${tune}_r${r}"
@@ -187,7 +190,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --add_explanation False \
     --tk_instruct False \
     --data_dir ${data_dir} \
-    --task_dir data/tasks \
+    --task_dir ${task_dir} \
     --output_dir ${output_dir} \
     --overwrite_output_dir \
     --cache_dir ${cache} \

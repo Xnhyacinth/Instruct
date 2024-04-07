@@ -44,7 +44,7 @@ from transformers.utils import (
     replace_return_docstrings,
 )
 from transformers.utils.model_parallel_utils import assert_device_map, get_device_map
-from .configuration_gpt2 import GPT2Config
+from configuration_gpt2 import GPT2Config
 
 
 logger = logging.get_logger(__name__)

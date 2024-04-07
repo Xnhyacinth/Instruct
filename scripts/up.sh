@@ -5,7 +5,7 @@ git add *.py
 git add *.md
 git add scripts/*
 git add config/*
-git add src/*
+git add src/*.py
 git add LICENSE
 git add Dockerfile
 git commit -m 'update'

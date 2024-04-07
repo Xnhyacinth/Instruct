@@ -169,5 +169,7 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                         example = task_data.copy()
                         example["id"] = instance["id"]
                         example["Instance"] = instance
+                        import pdb
+                        pdb.set_trace()
                         yield f"{task_name}_{idx}", example
 
