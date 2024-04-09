@@ -12,6 +12,7 @@ from transformers import (
 from losses import att_mse_loss, cos_loss
 from model import T5LoraWrapper
 
+
 class DenserEvalCallback(TrainerCallback):
 
     def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
@@ -28,6 +29,7 @@ class DenserEvalCallback(TrainerCallback):
 
         return control
 
+
 def trim_batch(
     input_ids,
     pad_token_id,
@@ -40,6 +42,7 @@ def trim_batch(
     else:
         return (input_ids[:, keep_column_mask], attention_mask[:, keep_column_mask])
 
+
 def trim_batch_3d(
     hidden_states,
     pad_token_id,
@@ -50,12 +53,14 @@ def trim_batch_3d(
     keep_column_mask = attention_mask.ne(0).any(dim=0)
     return hidden_states[:, keep_column_mask, :], attention_mask[:, keep_column_mask]
 
+
 def label_smoothed_nll_loss(lprobs, target, epsilon=0.1, ignore_index=-100, average="instance"):
     """From fairseq"""
 
     import pdb
     pdb.set_trace()
-    target = target.unsqueeze(-1) # add an extra dimension for gathering, [bsz, seqlen, 1]
+    # add an extra dimension for gathering, [bsz, seqlen, 1]
+    target = target.unsqueeze(-1)
     nll_loss = -lprobs.gather(dim=-1, index=target)
     smooth_loss = -lprobs.sum(dim=-1, keepdim=True)
 
@@ -87,7 +92,7 @@ def label_smoothed_nll_loss(lprobs, target, epsilon=0.1, ignore_index=-100, aver
         smooth_loss = smooth_loss.squeeze(-1).sum(-1)
         loss = (1.0 - epsilon) * nll_loss + eps_i * smooth_loss
         return loss, nll_loss
-        
+
     if average == "instance":
         # for each instance, compute the per-token average loss
         # return a 1d tensor, representing loss for each instance
@@ -105,8 +110,9 @@ def label_smoothed_nll_loss(lprobs, target, epsilon=0.1, ignore_index=-100, aver
         loss = (1.0 - epsilon) * nll_loss + eps_i * smooth_loss
         return loss, nll_loss
 
+
 class P3KDTrainer(Seq2SeqTrainer):
-    
+
     def post_init(self, args, t_model):
         self.config = args
         self.t_model = t_model
@@ -120,13 +126,13 @@ class P3KDTrainer(Seq2SeqTrainer):
         # for layer in self.t_model.modules():
         #     for _, param in layer.named_parameters():
         #         param.requires_grad = False
-    
+
     def trim_batch(self, batch, pad_token_id):
         batch[0], batch[1] = trim_batch(batch[0], pad_token_id, batch[1])
         if len(batch) == 4:
             batch[2], batch[3] = trim_batch(batch[2], pad_token_id, batch[3])
-        return batch 
-    
+        return batch
+
     # kd loss
     def cal_loss(self, s_logits, t_logits, temperature):
         soft_labels = F.log_softmax(
@@ -140,7 +146,7 @@ class P3KDTrainer(Seq2SeqTrainer):
         loss = torch.mean(torch.sum(ori_kld_loss, dim=-1))
 
         return loss
-    
+
     def compute_kernel_bias(self, vecs, n_components=256):
         """compute kernel and bias
         vecs.shape = [num_samples, embedding_size]
@@ -158,45 +164,55 @@ class P3KDTrainer(Seq2SeqTrainer):
         if not (kernel is None or bias is None):
             vecs = (vecs + bias).dot(kernel)
         return vecs / (vecs**2).sum(axis=1, keepdims=True)**0.5
-    
+
     def preprocess_function(self, sample):
         output = self.t_model.encoder(**sample, return_dict=True)
-        pooled_sentence = output.last_hidden_state # shape is [batch_size, seq_len, hidden_size]
-        pooled_sentence = np.array(torch.mean(pooled_sentence, dim=1).cpu().detach().numpy())
+        # shape is [batch_size, seq_len, hidden_size]
+        pooled_sentence = output.last_hidden_state
+        pooled_sentence = np.array(torch.mean(
+            pooled_sentence, dim=1).cpu().detach().numpy())
         kernel, bias = self.compute_kernel_bias(pooled_sentence, 255)
-        pooled_sentence = self.transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
+        pooled_sentence = self.transform_and_normalize(
+            pooled_sentence, kernel=kernel, bias=bias)
         sample['features'] = pooled_sentence
         return sample
-    
+
     def get_features(self, inputs):
         output = self.t_model.encoder(**inputs, return_dict=True)
-        pooled_sentence = output.last_hidden_state # shape is [batch_size, seq_len, hidden_size]
-        pooled_sentence = np.array(torch.mean(pooled_sentence, dim=1).cpu().detach().numpy())
+        # shape is [batch_size, seq_len, hidden_size]
+        pooled_sentence = output.last_hidden_state
+        pooled_sentence = np.array(torch.mean(
+            pooled_sentence, dim=1).cpu().detach().numpy())
         kernel, bias = self.compute_kernel_bias(pooled_sentence, 255)
-        pooled_sentence = self.transform_and_normalize(pooled_sentence, kernel=kernel, bias=bias)
+        pooled_sentence = self.transform_and_normalize(
+            pooled_sentence, kernel=kernel, bias=bias)
         return pooled_sentence
-    
+
     def query_logits_distill(self,
-                                   s_logits,
-                                   t_logits,
-                                   s_input_attention_mask,
-                                   t_input_attention_mask,
-                                   ):
+                             s_logits,
+                             t_logits,
+                             s_input_attention_mask,
+                             t_input_attention_mask,
+                             ):
         loss_fn = nn.KLDivLoss(reduction="batchmean")
         # extract the s_logits
         flat_s_logits = s_logits.reshape(-1, s_logits.shape[-1]).contiguous()
         flat_t_logits = t_logits.reshape(-1, t_logits.shape[-1]).contiguous()
-        flat_t_attention_mask = t_input_attention_mask.reshape(-1, 1).contiguous().bool()
-        flat_s_attention_mask = s_input_attention_mask.reshape(-1, 1).contiguous().bool()
-        select_s_logits = torch.masked_select(flat_s_logits, flat_s_attention_mask).reshape(-1, flat_s_logits.shape[-1])
-        select_t_logits = torch.masked_select(flat_t_logits, flat_t_attention_mask).reshape(-1, flat_t_logits.shape[-1])
+        flat_t_attention_mask = t_input_attention_mask.reshape(
+            -1, 1).contiguous().bool()
+        flat_s_attention_mask = s_input_attention_mask.reshape(
+            -1, 1).contiguous().bool()
+        select_s_logits = torch.masked_select(
+            flat_s_logits, flat_s_attention_mask).reshape(-1, flat_s_logits.shape[-1])
+        select_t_logits = torch.masked_select(
+            flat_t_logits, flat_t_attention_mask).reshape(-1, flat_t_logits.shape[-1])
 
         kl_loss = loss_fn(
             F.log_softmax(select_s_logits/self.model_args.temperature, dim=1),
             F.softmax(select_t_logits/self.model_args.temperature, dim=1)
         )
         return kl_loss
-    
+
     def cal_kl(self, logits, t_logits):
         p_s = F.log_softmax(logits / 4.0, dim=-1)
         p_t = F.softmax(t_logits / 4.0, dim=-1)
@@ -204,32 +220,34 @@ class P3KDTrainer(Seq2SeqTrainer):
             F.kl_div(p_s, p_t, reduction='batchmean')
         )
         return torch.sigmoid(kl_loss) * kl_loss / 2
-    
+
     def cal_hd(self, hd, t_hd, context_mask=None):
         if self.config.select:
             hd = [hd[0], hd[len(hd) // 2], hd[-1]]
             t_hd = [t_hd[0], t_hd[len(t_hd) // 2], t_hd[-1]]
 
         loss_h = [cos_loss(
-                h,
-                t_h,
-                context_mask if context_mask is None else context_mask.view(context_mask.size(0) * context_mask.size(1), -1),
-            )
+            h,
+            t_h,
+            context_mask if context_mask is None else context_mask.view(
+                context_mask.size(0) * context_mask.size(1), -1),
+        )
             for h, t_h in zip(hd, t_hd)
         ]
         return sum(loss_h) / len(loss_h)
-    
+
     def cal_attn(self, attn, t_attn, context_mask=None):
         if self.config.select:
             attn = [attn[0], attn[len(attn) // 2], attn[-1]]
             t_attn = [t_attn[0], t_attn[len(t_attn) // 2], t_attn[-1]]
 
         loss_a = [
-            att_mse_loss(a, t_a, context_mask if context_mask is None else context_mask.view(context_mask.size(0) * context_mask.size(1), -1))
+            att_mse_loss(a, t_a, context_mask if context_mask is None else context_mask.view(
+                context_mask.size(0) * context_mask.size(1), -1))
             for a, t_a in zip(attn, t_attn)
         ]
         return sum(loss_a) / len(loss_a)
-    
+
     def compute_loss(self, model, inputs, return_outputs=False):
         # forward pass
         self.t_model.eval()
@@ -241,35 +259,42 @@ class P3KDTrainer(Seq2SeqTrainer):
         if self.config.use_attn:
             output_attentions = True
         with torch.no_grad():
-            t_outputs = self.t_model(**inputs[0], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
+            t_outputs = self.t_model(
+                **inputs[0], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         # t_loss = t_outputs.get("loss")
         t_logits = t_outputs.get("logits")
-        
+
         # prefix_encodings = self.get_features(inputs[1])
         # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
         input = inputs[1]
-        outputs = model(**input, return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
+        outputs = model(**input, return_dict=True, output_attentions=output_attentions,
+                        output_hidden_states=output_hidden_states)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
         if self.config.use_ce:
             loss = (
-                    self.config.alpha_kd * self.cal_loss(logits, t_logits, self.config.temperature)
-                    + (1 - self.config.alpha_kd) * loss
-                )
+                self.config.alpha_kd *
+                self.cal_loss(logits, t_logits, self.config.temperature)
+                + (1 - self.config.alpha_kd) * loss
+            )
         if self.config.use_kl:
             loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
         if self.config.use_hd:
-            loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"))
-            loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states")) * 10
+            loss += self.cal_hd(outputs.get("encoder_hidden_states"),
+                                t_outputs.get("encoder_hidden_states"))
+            loss += self.cal_hd(outputs.get("decoder_hidden_states"),
+                                t_outputs.get("decoder_hidden_states")) * 10
         if self.config.use_attn:
-            loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions")) * 1000
-            loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions")) * 10
+            loss += self.cal_attn(outputs.get("encoder_attentions"),
+                                  t_outputs.get("encoder_attentions")) * 1000
+            loss += self.cal_attn(outputs.get("decoder_attentions"),
+                                  t_outputs.get("decoder_attentions")) * 10
             loss = loss.to(torch.bfloat16)
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()
         # loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
         return (loss, outputs) if return_outputs else loss
-    
+
     # rewrite the evaluation loop, with customized call to compute_metrics
     def evaluation_loop(
         self,
@@ -327,7 +352,8 @@ class P3KDTrainer(Seq2SeqTrainer):
         eval_dataset = dataloader.dataset
 
         if is_torch_tpu_available():
-            dataloader = pl.ParallelLoader(dataloader, [args.device]).per_device_loader(args.device)
+            dataloader = pl.ParallelLoader(
+                dataloader, [args.device]).per_device_loader(args.device)
 
         if args.past_index >= 0:
             self._past = None
@@ -356,7 +382,8 @@ class P3KDTrainer(Seq2SeqTrainer):
 
             # Prediction step
             input = inputs[1]
-            loss, logits, labels = self.prediction_step(model, input, prediction_loss_only, ignore_keys=ignore_keys)
+            loss, logits, labels = self.prediction_step(
+                model, input, prediction_loss_only, ignore_keys=ignore_keys)
 
             if is_torch_tpu_available():
                 xm.mark_step()
@@ -364,31 +391,38 @@ class P3KDTrainer(Seq2SeqTrainer):
             # Update containers on host
             if loss is not None:
                 losses = self._nested_gather(loss.repeat(batch_size))
-                losses_host = losses if losses_host is None else torch.cat((losses_host, losses), dim=0)
+                losses_host = losses if losses_host is None else torch.cat(
+                    (losses_host, losses), dim=0)
             if labels is not None:
                 labels = self._pad_across_processes(labels)
                 labels = self._nested_gather(labels)
-                labels_host = labels if labels_host is None else nested_concat(labels_host, labels, padding_index=-100)
+                labels_host = labels if labels_host is None else nested_concat(
+                    labels_host, labels, padding_index=-100)
             if logits is not None:
                 logits = self._pad_across_processes(logits)
                 logits = self._nested_gather(logits)
                 if self.preprocess_logits_for_metrics is not None:
                     logits = self.preprocess_logits_for_metrics(logits, labels)
-                preds_host = logits if preds_host is None else nested_concat(preds_host, logits, padding_index=-100)
-            self.control = self.callback_handler.on_prediction_step(args, self.state, self.control)
+                preds_host = logits if preds_host is None else nested_concat(
+                    preds_host, logits, padding_index=-100)
+            self.control = self.callback_handler.on_prediction_step(
+                args, self.state, self.control)
 
             # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
             if args.eval_accumulation_steps is not None and (step + 1) % args.eval_accumulation_steps == 0:
                 if losses_host is not None:
                     losses = nested_numpify(losses_host)
-                    all_losses = losses if all_losses is None else np.concatenate((all_losses, losses), axis=0)
+                    all_losses = losses if all_losses is None else np.concatenate(
+                        (all_losses, losses), axis=0)
                 if preds_host is not None:
                     logits = nested_numpify(preds_host)
-                    all_preds = logits if all_preds is None else nested_concat(all_preds, logits, padding_index=-100)
+                    all_preds = logits if all_preds is None else nested_concat(
+                        all_preds, logits, padding_index=-100)
                 if labels_host is not None:
                     labels = nested_numpify(labels_host)
                     all_labels = (
-                        labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
+                        labels if all_labels is None else nested_concat(
+                            all_labels, labels, padding_index=-100)
                     )
 
                 # Set back to None to begin a new accumulation
@@ -401,13 +435,16 @@ class P3KDTrainer(Seq2SeqTrainer):
         # Gather all remaining tensors and put them back on the CPU
         if losses_host is not None:
             losses = nested_numpify(losses_host)
-            all_losses = losses if all_losses is None else np.concatenate((all_losses, losses), axis=0)
+            all_losses = losses if all_losses is None else np.concatenate(
+                (all_losses, losses), axis=0)
         if preds_host is not None:
             logits = nested_numpify(preds_host)
-            all_preds = logits if all_preds is None else nested_concat(all_preds, logits, padding_index=-100)
+            all_preds = logits if all_preds is None else nested_concat(
+                all_preds, logits, padding_index=-100)
         if labels_host is not None:
             labels = nested_numpify(labels_host)
-            all_labels = labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
+            all_labels = labels if all_labels is None else nested_concat(
+                all_labels, labels, padding_index=-100)
 
         # Number of samples
         if has_length(eval_dataset):
@@ -430,7 +467,8 @@ class P3KDTrainer(Seq2SeqTrainer):
 
         # Metrics!
         if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
-            metrics = self.compute_metrics(dataset=eval_dataset, preds=all_preds, save_prefix=metric_key_prefix)
+            metrics = self.compute_metrics(
+                dataset=eval_dataset, preds=all_preds, save_prefix=metric_key_prefix)
         else:
             metrics = {}
 
@@ -495,18 +533,20 @@ class P3KDTrainer(Seq2SeqTrainer):
             gen_kwargs.update(
                 {
                     "num_beams": self._num_beams if self._num_beams is not None else self.model.config.num_beams,
-                    "top_k": 50, 
+                    "top_k": 50,
                     "top_p": 0.95,
                     "do_sample": True,
                 }
             )
-        
+
         if "attention_mask" in inputs:
             gen_kwargs["attention_mask"] = inputs.get("attention_mask", None)
         if "instruction_input" in inputs:
-            gen_kwargs["instruction_input"] = inputs.get("instruction_input", None)
+            gen_kwargs["instruction_input"] = inputs.get(
+                "instruction_input", None)
         if "instruction_attention_mask" in inputs:
-            gen_kwargs["instruction_attention_mask"] = inputs.get("instruction_attention_mask", None)
+            gen_kwargs["instruction_attention_mask"] = inputs.get(
+                "instruction_attention_mask", None)
         if "features" in inputs:
             gen_kwargs["features"] = inputs.get("features", None)
         # prepare generation inputs
@@ -520,21 +560,24 @@ class P3KDTrainer(Seq2SeqTrainer):
         self.model.gen = True
 
         generated_tokens = self.model.generate(
-            **{'input_ids':generation_inputs},
+            **{'input_ids': generation_inputs},
             **gen_kwargs,
         )
         # in case the batch is shorter than max length, the output should be padded
         if generated_tokens.shape[-1] < gen_kwargs["max_length"]:
-            generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_kwargs["max_length"])
+            generated_tokens = self._pad_tensors_to_max_len(
+                generated_tokens, gen_kwargs["max_length"])
 
         with torch.no_grad():
             if has_labels:
                 with self.autocast_smart_context_manager():
                     outputs = model(**inputs)
                 if self.label_smoother is not None:
-                    loss = self.label_smoother(outputs, inputs["labels"]).mean().detach()
+                    loss = self.label_smoother(
+                        outputs, inputs["labels"]).mean().detach()
                 else:
-                    loss = (outputs["loss"] if isinstance(outputs, dict) else outputs[0]).mean().detach()
+                    loss = (outputs["loss"] if isinstance(
+                        outputs, dict) else outputs[0]).mean().detach()
             else:
                 loss = None
 
@@ -544,7 +587,8 @@ class P3KDTrainer(Seq2SeqTrainer):
         if has_labels:
             labels = inputs["labels"]
             if labels.shape[-1] < gen_kwargs["max_length"]:
-                labels = self._pad_tensors_to_max_len(labels, gen_kwargs["max_length"])
+                labels = self._pad_tensors_to_max_len(
+                    labels, gen_kwargs["max_length"])
         else:
             labels = None
 
@@ -552,20 +596,21 @@ class P3KDTrainer(Seq2SeqTrainer):
 
 
 class P3Trainer(Seq2SeqTrainer):
-    
+
     def trim_batch(self, batch, pad_token_id):
         batch[0], batch[1] = trim_batch(batch[0], pad_token_id, batch[1])
         if len(batch) == 4:
             batch[2], batch[3] = trim_batch(batch[2], pad_token_id, batch[3])
-        return batch 
-    
+        return batch
+
     def compute_loss(self, model, inputs, return_outputs=False):
         batch = self.trim_batch(inputs, self.tokenizer.pad_token_id)
         input_ids, attention_mask = batch[0], batch[1]
         decoder_input_ids, decoder_attention_mask = batch[2], batch[3]
 
-        decoder_input_ids [decoder_input_ids == self.tokenizer.pad_token_id] = -100
-        
+        decoder_input_ids[decoder_input_ids ==
+                          self.tokenizer.pad_token_id] = -100
+
         outputs = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -573,13 +618,13 @@ class P3Trainer(Seq2SeqTrainer):
             decoder_attention_mask=decoder_attention_mask,
             use_cache=False
         )
-        
+
         # rank_classification
         # lprobs = F.log_softmax(outputs.logits, dim=-1)
         # loss, _ = label_smoothed_nll_loss(
-        #     lprobs, decoder_input_ids, 
-        #     epsilon=0.0, 
-        #     # epsilon=0.1 if is_training else 0.0, 
+        #     lprobs, decoder_input_ids,
+        #     epsilon=0.0,
+        #     # epsilon=0.1 if is_training else 0.0,
         #     ignore_index=self.tokenizer.pad_token_id,
         #     average="instance", # by default it's per-instance token-avg loss
         # )
@@ -589,7 +634,7 @@ class P3Trainer(Seq2SeqTrainer):
         # loss_fct = nn.CrossEntropyLoss()
         # loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
         return (loss, outputs) if return_outputs else loss
-    
+
     # rewrite the evaluation loop, with customized call to compute_metrics
     def evaluation_loop(
         self,
@@ -647,7 +692,8 @@ class P3Trainer(Seq2SeqTrainer):
         eval_dataset = dataloader.dataset
 
         if is_torch_tpu_available():
-            dataloader = pl.ParallelLoader(dataloader, [args.device]).per_device_loader(args.device)
+            dataloader = pl.ParallelLoader(
+                dataloader, [args.device]).per_device_loader(args.device)
 
         if args.past_index >= 0:
             self._past = None
@@ -665,6 +711,7 @@ class P3Trainer(Seq2SeqTrainer):
 
         observed_num_examples = 0
         # Main evaluation loop
+        loss_list = []
         for step, inputs in enumerate(dataloader):
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
@@ -675,7 +722,10 @@ class P3Trainer(Seq2SeqTrainer):
                     batch_size = observed_batch_size
 
             # Prediction step
-            loss, logits, labels = self.prediction_step(model, inputs, prediction_loss_only, ignore_keys=ignore_keys)
+            loss, logits, labels = self.prediction_step(
+                model, inputs[:4], prediction_loss_only, ignore_keys=ignore_keys)
+
+            loss_list += loss.cpu().detach().numpy().tolist()
 
             if is_torch_tpu_available():
                 xm.mark_step()
@@ -683,31 +733,38 @@ class P3Trainer(Seq2SeqTrainer):
             # Update containers on host
             if loss is not None:
                 losses = self._nested_gather(loss.repeat(batch_size))
-                losses_host = losses if losses_host is None else torch.cat((losses_host, losses), dim=0)
+                losses_host = losses if losses_host is None else torch.cat(
+                    (losses_host, losses), dim=0)
             if labels is not None:
                 labels = self._pad_across_processes(labels)
                 labels = self._nested_gather(labels)
-                labels_host = labels if labels_host is None else nested_concat(labels_host, labels, padding_index=-100)
+                labels_host = labels if labels_host is None else nested_concat(
+                    labels_host, labels, padding_index=-100)
             if logits is not None:
                 logits = self._pad_across_processes(logits)
                 logits = self._nested_gather(logits)
                 if self.preprocess_logits_for_metrics is not None:
                     logits = self.preprocess_logits_for_metrics(logits, labels)
-                preds_host = logits if preds_host is None else nested_concat(preds_host, logits, padding_index=-100)
-            self.control = self.callback_handler.on_prediction_step(args, self.state, self.control)
+                preds_host = logits if preds_host is None else nested_concat(
+                    preds_host, logits, padding_index=-100)
+            self.control = self.callback_handler.on_prediction_step(
+                args, self.state, self.control)
 
             # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
             if args.eval_accumulation_steps is not None and (step + 1) % args.eval_accumulation_steps == 0:
                 if losses_host is not None:
                     losses = nested_numpify(losses_host)
-                    all_losses = losses if all_losses is None else np.concatenate((all_losses, losses), axis=0)
+                    all_losses = losses if all_losses is None else np.concatenate(
+                        (all_losses, losses), axis=0)
                 if preds_host is not None:
                     logits = nested_numpify(preds_host)
-                    all_preds = logits if all_preds is None else nested_concat(all_preds, logits, padding_index=-100)
+                    all_preds = logits if all_preds is None else nested_concat(
+                        all_preds, logits, padding_index=-100)
                 if labels_host is not None:
                     labels = nested_numpify(labels_host)
                     all_labels = (
-                        labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
+                        labels if all_labels is None else nested_concat(
+                            all_labels, labels, padding_index=-100)
                     )
 
                 # Set back to None to begin a new accumulation
@@ -720,13 +777,16 @@ class P3Trainer(Seq2SeqTrainer):
         # Gather all remaining tensors and put them back on the CPU
         if losses_host is not None:
             losses = nested_numpify(losses_host)
-            all_losses = losses if all_losses is None else np.concatenate((all_losses, losses), axis=0)
+            all_losses = losses if all_losses is None else np.concatenate(
+                (all_losses, losses), axis=0)
         if preds_host is not None:
             logits = nested_numpify(preds_host)
-            all_preds = logits if all_preds is None else nested_concat(all_preds, logits, padding_index=-100)
+            all_preds = logits if all_preds is None else nested_concat(
+                all_preds, logits, padding_index=-100)
         if labels_host is not None:
             labels = nested_numpify(labels_host)
-            all_labels = labels if all_labels is None else nested_concat(all_labels, labels, padding_index=-100)
+            all_labels = labels if all_labels is None else nested_concat(
+                all_labels, labels, padding_index=-100)
 
         # Number of samples
         if has_length(eval_dataset):
@@ -749,7 +809,8 @@ class P3Trainer(Seq2SeqTrainer):
 
         # Metrics!
         if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
-            metrics = self.compute_metrics(dataset=eval_dataset, preds=all_preds, save_prefix=metric_key_prefix)
+            metrics = self.compute_metrics(
+                dataset=eval_dataset, preds=all_preds, save_prefix=metric_key_prefix)
         else:
             metrics = {}
 
@@ -795,6 +856,15 @@ class P3Trainer(Seq2SeqTrainer):
             Tuple[Optional[float], Optional[torch.Tensor], Optional[torch.Tensor]]: A tuple with the loss, logits and
             labels (each being optional).
         """
+        batch = self.trim_batch(inputs, self.tokenizer.pad_token_id)
+        input_ids, attention_mask = batch[0], batch[1]
+        decoder_input_ids, decoder_attention_mask = batch[2], batch[3]
+        inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": decoder_input_ids,
+            "decoder_attention_mask": decoder_attention_mask,
+        }
 
         if not self.args.predict_with_generate or prediction_loss_only:
             return super().prediction_step(
@@ -803,44 +873,30 @@ class P3Trainer(Seq2SeqTrainer):
 
         has_labels = "labels" in inputs
         inputs = self._prepare_inputs(inputs)
-
         # XXX: adapt synced_gpus for fairscale as well
         gen_kwargs = {
             "max_length": self._max_length if self._max_length is not None else self.model.config.max_length,
-            # "num_beams": self._num_beams if self._num_beams is not None else self.model.config.num_beams,
             "synced_gpus": True if is_deepspeed_zero3_enabled() else False,
         }
-
-        if "attention_mask" in inputs:
-            gen_kwargs["attention_mask"] = inputs.get("attention_mask", None)
-
+        
         # prepare generation inputs
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
-        
-        if hasattr(self.model, "encoder") and self.model.encoder.main_input_name != self.model.main_input_name:
-            generation_inputs = inputs[self.model.encoder.main_input_name]
-        else:
-            generation_inputs = inputs[self.model.main_input_name]
 
-        generated_tokens = self.model.generate(
-            **{'input_ids':generation_inputs},
-            **gen_kwargs,
+        output = self.model(
+            **inputs,
+            use_cache=False
         )
-        # in case the batch is shorter than max length, the output should be padded
-        if generated_tokens.shape[-1] < gen_kwargs["max_length"]:
-            generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_kwargs["max_length"])
 
-        with torch.no_grad():
-            if has_labels:
-                with self.autocast_smart_context_manager():
-                    outputs = model(**inputs)
-                if self.label_smoother is not None:
-                    loss = self.label_smoother(outputs, inputs["labels"]).mean().detach()
-                else:
-                    loss = (outputs["loss"] if isinstance(outputs, dict) else outputs[0]).mean().detach()
-            else:
-                loss = None
+        # rank_classification
+        lprobs = F.log_softmax(output.logits, dim=-1)
+        loss, _ = label_smoothed_nll_loss(
+            lprobs, decoder_input_ids,
+            epsilon=0.0,
+            # epsilon=0.1 if is_training else 0.0,
+            ignore_index=model.config.pad_token_id,
+            average=self.config.loss_avg_mode,  # by default it's per-instance token-avg loss
+        )
 
         if self.args.prediction_loss_only:
             return (loss, None, None)
@@ -848,8 +904,9 @@ class P3Trainer(Seq2SeqTrainer):
         if has_labels:
             labels = inputs["labels"]
             if labels.shape[-1] < gen_kwargs["max_length"]:
-                labels = self._pad_tensors_to_max_len(labels, gen_kwargs["max_length"])
+                labels = self._pad_tensors_to_max_len(
+                    labels, gen_kwargs["max_length"])
         else:
             labels = None
 
-        return (loss, generated_tokens, labels)
+        return (loss, lprobs, labels)

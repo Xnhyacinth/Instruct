@@ -3,7 +3,7 @@ import random
 import string
 import torch
 from transformers.data.data_collator import *
-from promptsource.templates import DatasetTemplates
+from t0.t0_config import eval
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class DataCollatorForP3:
             return tensor
         
         if not self.args.whitening:
-            sources, targets = [], []
+            sources, targets, options = [], [], []
             if self.kd:
                 prefixs, instances, s_sources = [], [], []
             for instance in batch:
@@ -79,6 +79,9 @@ class DataCollatorForP3:
                 else:
                     sources.append(source[:self.max_source_length])
 
+                if instance['Task'] in eval:
+                    options.append(instance['Instance']['options'])
+                
                 if self.student_input:
                     # s_source
                     pass
@@ -99,5 +102,5 @@ class DataCollatorForP3:
         decoder_input_ids = pad_tokens(targets, max_len=self.max_target_length)
         decoder_attention_mask = decoder_input_ids.ne(self.tokenizer.pad_token_id).long()
 
-        return input_ids, attention_mask, decoder_input_ids, decoder_attention_mask
+        return input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, options
         

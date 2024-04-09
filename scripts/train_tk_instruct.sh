@@ -49,7 +49,8 @@ extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 task_dir=data/tasks
 run_file=run_s2s.py
-max_num_instances=100
+max_num_instances=350
+gradient_accumulation_steps=2
 if [ "$e" == "eval" ];then
     cache="./cache_eval"
     name="${name}-eval"
@@ -90,12 +91,14 @@ if [ "$tune" == "kd" ];then
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-3b-def 
             fi
+            gradient_accumulation_steps=4
         fi
         if [ "$model" == "t5-xxl" ];then
             t_model=allenai/tk-instruct-11b-def-pos
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-11b-def 
             fi
+            gradient_accumulation_steps=8
         fi
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
@@ -202,7 +205,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --overwrite_cache \
     --per_device_train_batch_size ${bs} \
     --per_device_eval_batch_size ${bs} \
-    --gradient_accumulation_steps 2 \
+    --gradient_accumulation_steps ${gradient_accumulation_steps} \
     --pad_to_max_length False \
     --learning_rate ${lr} \
     --num_train_epochs ${epoch} \
