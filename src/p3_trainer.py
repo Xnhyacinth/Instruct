@@ -53,6 +53,8 @@ def trim_batch_3d(
 def label_smoothed_nll_loss(lprobs, target, epsilon=0.1, ignore_index=-100, average="instance"):
     """From fairseq"""
 
+    import pdb
+    pdb.set_trace()
     target = target.unsqueeze(-1) # add an extra dimension for gathering, [bsz, seqlen, 1]
     nll_loss = -lprobs.gather(dim=-1, index=target)
     smooth_loss = -lprobs.sum(dim=-1, keepdim=True)
@@ -118,7 +120,13 @@ class P3KDTrainer(Seq2SeqTrainer):
         # for layer in self.t_model.modules():
         #     for _, param in layer.named_parameters():
         #         param.requires_grad = False
-        
+    
+    def trim_batch(self, batch, pad_token_id):
+        batch[0], batch[1] = trim_batch(batch[0], pad_token_id, batch[1])
+        if len(batch) == 4:
+            batch[2], batch[3] = trim_batch(batch[2], pad_token_id, batch[3])
+        return batch 
+    
     # kd loss
     def cal_loss(self, s_logits, t_logits, temperature):
         soft_labels = F.log_softmax(
@@ -552,9 +560,11 @@ class P3Trainer(Seq2SeqTrainer):
         return batch 
     
     def compute_loss(self, model, inputs, return_outputs=False):
-        batch = self.trim_batch(inputs, self.pad_token_id)
+        batch = self.trim_batch(inputs, self.tokenizer.pad_token_id)
         input_ids, attention_mask = batch[0], batch[1]
         decoder_input_ids, decoder_attention_mask = batch[2], batch[3]
+
+        decoder_input_ids [decoder_input_ids == self.tokenizer.pad_token_id] = -100
         
         outputs = model(
             input_ids=input_ids,
@@ -563,19 +573,22 @@ class P3Trainer(Seq2SeqTrainer):
             decoder_attention_mask=decoder_attention_mask,
             use_cache=False
         )
+        
         # rank_classification
-        lprobs = F.log_softmax(outputs.logits, dim=-1)
-        loss, _ = label_smoothed_nll_loss(
-            lprobs, decoder_input_ids, 
-            epsilon=0.0, 
-            # epsilon=0.1 if is_training else 0.0, 
-            ignore_index=model.config.pad_token_id,
-            average="instance", # by default it's per-instance token-avg loss
-        )
+        # lprobs = F.log_softmax(outputs.logits, dim=-1)
+        # loss, _ = label_smoothed_nll_loss(
+        #     lprobs, decoder_input_ids, 
+        #     epsilon=0.0, 
+        #     # epsilon=0.1 if is_training else 0.0, 
+        #     ignore_index=self.tokenizer.pad_token_id,
+        #     average="instance", # by default it's per-instance token-avg loss
+        # )
+        loss = outputs.loss
+
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()
         # loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
-        return (loss.mean(), outputs) if return_outputs else loss
+        return (loss, outputs) if return_outputs else loss
     
     # rewrite the evaluation loop, with customized call to compute_metrics
     def evaluation_loop(

@@ -49,6 +49,7 @@ extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 task_dir=data/tasks
 run_file=run_s2s.py
+max_num_instances=100
 if [ "$e" == "eval" ];then
     cache="./cache_eval"
     name="${name}-eval"
@@ -59,17 +60,21 @@ if [ "$e" == "eval" ];then
 fi
 if [ "$dataset" == "p3" ];then
     config_files=0
-    data_dir=data_dict
-    task_dir=data_dict
+    data_dir=data_p3_eval
+    task_dir=data_p3
     name=experiment_p3_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
     output_dir=output_p3_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}
     run_file=run_s2s_kd_ac.py
+    max_num_instances=5000
 fi
 if [ "$tune" != "full" ];then
     name="${name}-${tune}_r${r}"
     output_dir="${output_dir}_${tune}_r${r}"
     run_file=run_s2s_${tune}.py
     extra_args="${extra_args} --r ${r}"
+    if [ "$dataset" == "p3" ];then
+        run_file=run_s2s_kd_ac.py
+    fi
 fi
 if [ "$tune" == "kd" ];then
     t_model=output/${model}_lr5e-5
@@ -181,8 +186,8 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --max_source_length 1024 \
     --max_target_length 128 \
     --generation_max_length 128 \
-    --max_num_instances_per_task 100 \
-    --max_num_instances_per_eval_task 100 \
+    --max_num_instances_per_task ${max_num_instances} \
+    --max_num_instances_per_eval_task ${max_num_instances} \
     --add_task_name False \
     --add_task_definition True \
     --num_pos_examples ${pos} \

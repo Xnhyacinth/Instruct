@@ -38,241 +38,66 @@ class DataCollatorForP3:
 
         if return_tensors is None:
             return_tensors = self.return_tensors
-
+        
+        def pad_tokens(lst, max_len, pad_id=None):
+            # everything is padding token in the beginning
+            if pad_id is None:
+                pad_id = self.tokenizer.pad_token_id
+                
+            tensor = torch.ones(len(lst), max_len, dtype=torch.long) * pad_id
+            # then fill each example into this big tensor
+            for i, item in enumerate(lst):
+                if len(item) > max_len:
+                    tensor[i, :] = torch.LongTensor(item[:max_len])
+                else:
+                    tensor[i, :len(item)] = torch.LongTensor(item)
+            return tensor
+        
         if not self.args.whitening:
-            sources = []
+            sources, targets = [], []
             if self.kd:
                 prefixs, instances, s_sources = [], [], []
             for instance in batch:
-                if 'anli' in instance['Task']:
-                    prompts = DatasetTemplates('anli', None)
+                # task_input = ""
+                # # add the input first.
+                # task_input += "Now complete the following example -\n"
+                # task_input += f"Input: "
+                # task_output = "\n"
+                # task_output += "Output: "
+                # input_prefix = self.tokenizer(task_input, add_special_tokens=False)["input_ids"]
+                # output_prefix = self.tokenizer(task_output, add_special_tokens=False)["input_ids"]
+                
+                if 'story_cloze' in instance['Task']:
+                    source = self.tokenizer(instance['Instance']['input'])["input_ids"]
+                    targets.append(self.tokenizer(instance['Instance']['output'])["input_ids"])
                 else:
-                    prompts = DatasetTemplates(
-                        f"{args.dataset_name}"
-                        if args.dataset_config_name is None
-                        else f"{args.dataset_name}/{args.dataset_config_name}"
-                    )
-                template = prompts[args.template_name]
-                task_input = ""
-                # add the input first.
-                task_input += "Now complete the following example -\n"
-                task_input += f"Input: {instance['Instance']['input'].strip()}"
-                if not task_input[-1] in string.punctuation:
-                    task_input += "."
-                task_input += "\n"
-                task_input += "Output: "
+                    source = instance["Instance"]["input_tokenized"]
+                    targets.append(instance["Instance"]["output_tokenized"])
                 
-                task_name = ""
-                if add_task_name:
-                    task_name += instance["Task"] + ". "
-
-                definition = ""
-                if add_task_definition:
-                    if isinstance(instance["Definition"], list):
-                        definition = "Definition: " + instance["Definition"][0].strip() # TODO: should we use <Definition>?
-                    else:
-                        definition = "Definition: " + instance["Definition"].strip()
-                    if not definition[-1] in string.punctuation:
-                        definition += "."
-                    definition += "\n\n"
-                
-                # try to add positive examples.
-                pos_examples = []
-                for idx, pos_example in enumerate(instance["Positive Examples"][:num_pos_examples]):
-                    pos_example_str = f" Positive Example {idx+1} -\n"
-                    pos_example_str += f"Input: {pos_example['input'].strip()}"
-                    if not pos_example_str[-1] in string.punctuation:
-                        pos_example_str += "."
-                    pos_example_str += "\n"
-                    pos_example_str += f" Output: {pos_example['output'].strip()}"
-                    if not pos_example_str[-1] in string.punctuation:
-                        pos_example_str += "."
-                    pos_example_str += "\n" 
-                    if add_explanation and "explanation" in pos_example:
-                        pos_example_str += f" Explanation: {pos_example['explanation'].strip()}"
-                        if not pos_example_str[-1] in string.punctuation:
-                            pos_example_str += "."
-                        pos_example_str += "\n"
-                    pos_example_str += "\n"
-                    if len(self.tokenizer(definition + " ".join(pos_examples) + pos_example_str + task_input)["input_ids"]) <= self.max_source_length:
-                        pos_examples.append(pos_example_str)
-                    else:
-                        # d = self.max_source_length - len(self.tokenizer(definition + " ".join(pos_examples) + task_input)["input_ids"])
-                        # tokenized_pos_example_str = self.tokenizer(pos_example_str)["input_ids"]
-                        # pos_examples.append(
-                        #     self.tokenizer.decode(tokenized_pos_example_str[:d // 2], skip_special_tokens=True) + 
-                        #     self.tokenizer.decode(tokenized_pos_example_str[-d // 2:], skip_special_tokens=True)
-                        #     )
-                        break
-                
-                # try to add negative examples.
-                neg_examples = []
-                for idx, neg_example in enumerate(instance["Negative Examples"][:num_neg_examples]):
-                    neg_example_str = f" Negative Example {idx+1} -\n"
-                    neg_example_str += f"Input: {neg_example['input'].strip()}"
-                    if not neg_example_str[-1] in string.punctuation:
-                        neg_example_str += "."
-                    neg_example_str += "\n"
-                    neg_example_str += f" Output: {neg_example['output'].strip()}"
-                    if not neg_example_str[-1] in string.punctuation:
-                        neg_example_str += "."
-                    neg_example_str += "\n"
-                    if add_explanation and "explanation" in neg_example:
-                        neg_example_str += f" Explanation: {neg_example['explanation'].strip()}"
-                        if not neg_example_str[-1] in string.punctuation:
-                            neg_example_str += "."
-                        neg_example_str += "\n"
-                    neg_example_str += "\n"
-                    if len(self.tokenizer(definition + " ".join(pos_examples) + " ".join(neg_examples) + neg_example_str + task_input)["input_ids"]) <= self.max_source_length:
-                        neg_examples.append(neg_example_str)
-                    else:
-                        break 
-
-                source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
-                tokenized_source = self.tokenizer(source)["input_ids"]
-                if len(tokenized_source) <= self.max_source_length:
+                if len(source) <= self.max_source_length:
                     sources.append(source)
                 else:
-                    sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
+                    sources.append(source[:self.max_source_length])
 
                 if self.student_input:
                     # s_source
-                    s_source = task_name + definition + "".join(pos_examples[:self.args.s_num_pos_examples]) + task_input
-                    tokenized_s_source = self.tokenizer(s_source)["input_ids"]
-                    if len(tokenized_s_source) <= self.max_source_length:
-                        s_sources.append(s_source)
-                    else:
-                        s_sources.append(self.tokenizer.decode(tokenized_s_source[:self.max_source_length], skip_special_tokens=True))
+                    pass
                 
                 if self.kd:
                     # prefix
-                    prefix = task_name + definition + "".join(pos_examples[:self.args.s_num_pos_examples]) + "".join(neg_examples)
-                    prefixs.append(prefix)
+                    pass
                     
                 if self.args.custom_model:
                     # instance
-                    instances.append(definition + task_input)
+                    pass
                 
         else:
-            sources, features, instances, s_sources, instruction_inputs, attention_masks = [], [], [], [], [], []
-            for instance in batch:
-                sources.append(instance["source"])     
-                features.append(self.task_features[instance['Task']])
-                if self.student_input:
-                    s_sources.append(instance["s_source"])
-                if self.args.custom_model:
-                    instances.append(instance["instance"])
-                    instruction_inputs.append(self.instruction_inputs[instance['Task']])
-                    attention_masks.append(self.attention_masks[instance['Task']])
-        if self.text_only:
-            t_model_inputs = {"inputs": sources}
-        else:
-            t_model_inputs = self.tokenizer(
-                sources, 
-                max_length=self.max_source_length, 
-                padding=self.padding,
-                return_tensors=self.return_tensors, 
-                truncation=True,
-                pad_to_multiple_of=self.pad_to_multiple_of)
+           pass
         
-        if "output" in batch[0]["Instance"] and batch[0]["Instance"]["output"]:
-            # Randomly select one reference if multiple are provided.
-            labels = [random.choice(ex["Instance"]["output"]) for ex in batch]
-            if self.text_only:
-                t_model_inputs["labels"] = labels
-            else:
-                with self.tokenizer.as_target_tokenizer():
-                    labels = self.tokenizer(
-                        labels,
-                        max_length=self.max_target_length,
-                        padding=self.padding,
-                        return_tensors=self.return_tensors,
-                        truncation=True,
-                        pad_to_multiple_of=self.pad_to_multiple_of
-                    )
-                label_mask = labels["attention_mask"].bool()
-                t_model_inputs["labels"] = labels["input_ids"].masked_fill(~label_mask, self.label_pad_token_id)
-        else:
-            t_model_inputs["labels"] = None
+        input_ids = pad_tokens(sources, max_len=self.max_source_length)
+        attention_mask = input_ids.ne(self.tokenizer.pad_token_id).long()
+        decoder_input_ids = pad_tokens(targets, max_len=self.max_target_length)
+        decoder_attention_mask = decoder_input_ids.ne(self.tokenizer.pad_token_id).long()
 
-        # prepare decoder_input_ids
-        if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels") and not self.text_only:
-            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=t_model_inputs["labels"])
-            t_model_inputs["decoder_input_ids"] = decoder_input_ids
-        if not self.kd:
-            return t_model_inputs
-        else:
-            if not self.args.whitening:
-                with self.tokenizer.as_target_tokenizer():
-                    prefixs_inputs = self.tokenizer(
-                        prefixs,
-                        max_length=self.max_source_length,
-                        padding="max_length" if self.args.prefix_length > 0 and not 'gpt' in self.args.name else self.padding,
-                        return_tensors=self.return_tensors,
-                        truncation=True,
-                        pad_to_multiple_of=self.pad_to_multiple_of
-                    )
-                    if self.args.hyperencoder:
-                        features = prefixs_inputs
-                    else:
-                        prefixs_inputs = prefixs_inputs.to(self.model.device)
-                        hidden_states = self.model.encoder(**prefixs_inputs, return_dict=True, output_hidden_states=True).hidden_states
-                        
-                        if self.args.pooling == 'first_last_avg':
-                            pooled_sentence = (hidden_states[-1] + hidden_states[1])
-                        elif self.args.pooling == 'last_avg':
-                            pooled_sentence = (hidden_states[-1])
-                        elif self.args.pooling == 'last2avg':
-                            pooled_sentence = (hidden_states[-1] + hidden_states[-2])
-                        else:
-                            raise Exception("unknown pooling {}".format(self.args.pooling))
-                        
-                        if self.args.custom_model or self.args.prefix_length > 0:
-                            instruction_inputs = hidden_states[-1].cpu()
-                            attention_masks = prefixs_inputs['attention_mask'].cpu()
-                        features = pooled_sentence.mean(dim=1).cpu()
-            
-            if self.args.custom_model:
-                if self.text_only:
-                    model_inputs = {"inputs": instances}
-                else:
-                    with self.tokenizer.as_target_tokenizer():
-                        model_inputs = self.tokenizer(
-                            instances,
-                            max_length=self.max_source_length,
-                            padding=self.padding,
-                            return_tensors=self.return_tensors,
-                            truncation=True,
-                            pad_to_multiple_of=self.pad_to_multiple_of
-                        )
-                model_inputs["labels"] = t_model_inputs["labels"]
-                if "decoder_input_ids" in t_model_inputs.keys():
-                    model_inputs["decoder_input_ids"] = decoder_input_ids
-            elif self.student_input:
-                if self.text_only:
-                    model_inputs = {"inputs": s_sources}
-                else:
-                    model_inputs = self.tokenizer(
-                        s_sources,
-                        max_length=self.max_source_length,
-                        padding=self.padding,
-                        return_tensors=self.return_tensors,
-                        truncation=True,
-                        pad_to_multiple_of=self.pad_to_multiple_of
-                    )
-                model_inputs["labels"] = t_model_inputs["labels"] 
-                if "decoder_input_ids" in t_model_inputs.keys():
-                    model_inputs["decoder_input_ids"] = decoder_input_ids
-            else:
-                model_inputs = t_model_inputs.copy()
-            if self.args.hyperencoder:
-                model_inputs["features"] = features
-            else:
-                model_inputs["features"] = torch.Tensor(features)
-                if self.args.prefix_length > 0 or self.args.custom_model:
-                    model_inputs["instruction_input"] = torch.Tensor(instruction_inputs)
-                    model_inputs["instruction_attention_mask"] = torch.Tensor(attention_masks)
-                if "gpt" in self.args.name:
-                    model_inputs["instruction_input"] = prefixs_inputs.to('cpu')
-
-            return t_model_inputs, model_inputs
+        return input_ids, attention_mask, decoder_input_ids, decoder_attention_mask
+        
