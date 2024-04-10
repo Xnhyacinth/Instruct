@@ -98,7 +98,8 @@ if [ "$tune" == "kd" ];then
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-11b-def 
             fi
-            gradient_accumulation_steps=8
+            gradient_accumulation_steps=4
+            max_num_instances=250
         fi
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
