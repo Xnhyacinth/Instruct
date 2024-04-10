@@ -49,7 +49,7 @@ extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 task_dir=data/tasks
 run_file=run_s2s.py
-max_num_instances=350
+max_num_instances=500
 gradient_accumulation_steps=2
 if [ "$e" == "eval" ];then
     cache="./cache_eval"
@@ -91,14 +91,14 @@ if [ "$tune" == "kd" ];then
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-3b-def 
             fi
-            gradient_accumulation_steps=4
+            gradient_accumulation_steps=8
         fi
         if [ "$model" == "t5-xxl" ];then
             t_model=allenai/tk-instruct-11b-def-pos
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-11b-def 
             fi
-            gradient_accumulation_steps=4
+            gradient_accumulation_steps=8
             max_num_instances=250
         fi
         name="${name}_allenai"
@@ -209,7 +209,8 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --gradient_accumulation_steps ${gradient_accumulation_steps} \
     --pad_to_max_length False \
     --learning_rate ${lr} \
-    --num_train_epochs ${epoch} \
+    --num_train_epochs 5.0 \
+    --max_steps ${epoch} \
     --lr_scheduler_type constant \
     --warmup_ratio ${warmup_ratio} \
     --logging_strategy steps \
@@ -220,4 +221,5 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --bf16 \
     --run_name ${name} \
     --save_total_limit 1 \
+    --seed 42 \
     ${extra_args}
