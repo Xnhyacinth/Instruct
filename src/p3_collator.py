@@ -3,7 +3,7 @@ import random
 import string
 import torch
 from transformers.data.data_collator import *
-from t0.t0_config import eval
+from t0_config import eval
 
 logger = logging.getLogger(__name__)
 

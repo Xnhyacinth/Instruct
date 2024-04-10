@@ -20,7 +20,7 @@ def load_data(base_dir, datasets, split, k, seed):
     return data
 
 def load_dataset_names(task, split):
-    with open(os.path.join("task_configs", task+".json"), "r") as f:
+    with open(f'{task}.json', "r") as f:
         config = json.load(f)
     datasets = config[split]
     return datasets
