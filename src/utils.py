@@ -4,7 +4,7 @@ import json
 import random
 import numpy as np
 import torch
-from encdec.task_configs.t0_config import DATA_SPLITS_SIZES
+from t0_config import DATA_SPLITS_SIZES
 
 # copied from metaicl
 
