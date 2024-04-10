@@ -57,10 +57,9 @@ def trim_batch_3d(
 def label_smoothed_nll_loss(lprobs, target, epsilon=0.1, ignore_index=-100, average="instance"):
     """From fairseq"""
 
-    import pdb
-    pdb.set_trace()
     # add an extra dimension for gathering, [bsz, seqlen, 1]
     target = target.unsqueeze(-1)
+
     nll_loss = -lprobs.gather(dim=-1, index=target)
     smooth_loss = -lprobs.sum(dim=-1, keepdim=True)
 
@@ -711,7 +710,8 @@ class P3Trainer(Seq2SeqTrainer):
 
         observed_num_examples = 0
         # Main evaluation loop
-        loss_list = []
+        loss_list, metadata = [], []
+        start_idx = 0
         for step, inputs in enumerate(dataloader):
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
@@ -726,6 +726,14 @@ class P3Trainer(Seq2SeqTrainer):
                 model, inputs[:4], prediction_loss_only, ignore_keys=ignore_keys)
 
             loss_list += loss.cpu().detach().numpy().tolist()
+
+            for dp in inputs[4]:
+                n_options = len(dp)
+                metadata.append({
+                    "indices": list(range(start_idx, start_idx + n_options)),
+                    "options": dp,
+                })
+                start_idx += n_options
 
             if is_torch_tpu_available():
                 xm.mark_step()
@@ -810,7 +818,7 @@ class P3Trainer(Seq2SeqTrainer):
         # Metrics!
         if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
             metrics = self.compute_metrics(
-                dataset=eval_dataset, preds=all_preds, save_prefix=metric_key_prefix)
+                dataset=eval_dataset, metadata=metadata, preds=all_preds, save_prefix=metric_key_prefix)
         else:
             metrics = {}
 
@@ -878,7 +886,7 @@ class P3Trainer(Seq2SeqTrainer):
             "max_length": self._max_length if self._max_length is not None else self.model.config.max_length,
             "synced_gpus": True if is_deepspeed_zero3_enabled() else False,
         }
-        
+
         # prepare generation inputs
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
@@ -891,11 +899,11 @@ class P3Trainer(Seq2SeqTrainer):
         # rank_classification
         lprobs = F.log_softmax(output.logits, dim=-1)
         loss, _ = label_smoothed_nll_loss(
-            lprobs, decoder_input_ids,
+            lprobs, inputs.get('labels', None),
             epsilon=0.0,
             # epsilon=0.1 if is_training else 0.0,
-            ignore_index=model.config.pad_token_id,
-            average=self.config.loss_avg_mode,  # by default it's per-instance token-avg loss
+            ignore_index=self.tokenizer.pad_token_id,
+            average='instance',  # by default it's per-instance token-avg loss
         )
 
         if self.args.prediction_loss_only:

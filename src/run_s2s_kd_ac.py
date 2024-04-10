@@ -18,6 +18,7 @@ Fine-tuning the library models for sequence to sequence.
 """
 # You can also adapt this script on your own sequence to sequence task. Pointers for this are left as comments.
 
+from collections import defaultdict
 import logging
 import os
 from pathlib import Path
@@ -55,11 +56,7 @@ from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
 from p3_trainer import P3Trainer
 from p3_collator import DataCollatorForP3
-from encdec.config import FiDConfig, SingleTaskConfig
-from encdec.data_fid import FiDPretrainDataForEncDec
-from encdec.data_t0singletask import T0SingleTaskDataForEncDec
-from encdec.utils import expand_dataset_to_prompts, load_dataset_names, map_prompt_name_to_task_name
-from encdec.task_configs.t0_config import split_infos
+from utils import expand_dataset_to_prompts, load_dataset_names, map_prompt_name_to_task_name
 from model import T5LoraWrapper, LoRAT5
 from ni_collator import DataCollatorForNI
 from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
@@ -935,6 +932,65 @@ def main():
                         "Prediction": pred
                     }) + "\n")
         return result
+
+    def evaluate(data, all_predictions, datasets):
+        assert len(data) == len(all_predictions)
+
+        performance_dict = {}
+        for dataset in datasets:
+            datapoints, predictions = [], []
+            for dp, prediction in zip(self.data, all_predictions):
+                if dp["task"] in dataset: # a temparary hack for boolq vs. boolq-all
+                    datapoints.append(dp)
+                    predictions.append(prediction)
+            metric, perf = evaluate_a_dataset(dataset, predictions, datapoints)
+            performance_dict[dataset] = (metric, perf)
+
+        if len(datasets) > 1: # multitask
+            return performance_dict
+        else: # singletask
+            return metric, perf
+
+    def evaluate_a_dataset(dataset_name, predictions, datapoints):
+        is_classification = False 
+        
+        accs = []
+        precisions = defaultdict(list)
+        recalls = defaultdict(list)
+        for prediction, datapoint in zip(predictions, datapoints):
+            prediction = prediction.strip()
+            groundtruth = datapoint["output"].strip()
+            is_correct = prediction==groundtruth
+            accs.append(is_correct)
+            if is_classification:
+                recalls[groundtruth].append(is_correct)
+                precisions[prediction].append(is_correct)
+
+        if not is_classification:
+            return "acc", np.mean(accs)
+
+        f1s = []
+        for key in recalls:
+            precision = np.mean(precisions[key]) if key in precisions else 1.0
+            recall = np.mean(recalls[key])
+            if precision+recall==0:
+                f1s.append(0)
+            else:
+                f1s.append(2*precision*recall / (precision+recall))
+
+        return "f1", np.mean(f1s)
+    
+    def compute_p3_metrics(dataset, metadata, preds, save_prefix=None):
+        predictions = []
+        for idx, dp in enumerate(metadata):
+            curr_instance_losses = [preds[indices] for indices in dp["indices"]]
+            prediction_idx = sorted(enumerate(curr_instance_losses), key=lambda x: x[1])[0][0]
+            prediction = dp["options"][prediction_idx]
+            predictions.append(prediction.strip())
+            
+        references = list(dict([e['Task'] for e in dataset]))
+        
+        perf = evaluate(metadata, predictions, references)
 
     # model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     # if model_args.load_hypernet_weights is not None:
