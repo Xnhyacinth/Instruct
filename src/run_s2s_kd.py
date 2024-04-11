@@ -140,7 +140,7 @@ class ModelArguments:
         },
     )
     prefix_length: Optional[int] = field(
-        default=32,
+        default=0,
         metadata={
             "help": "The length of gen prefix."
         },

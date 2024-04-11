@@ -98,7 +98,7 @@ if [ "$tune" == "kd" ];then
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-11b-def 
             fi
-            gradient_accumulation_steps=8
+            gradient_accumulation_steps=4
             max_num_instances=250
         fi
         name="${name}_allenai"
@@ -195,6 +195,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --add_task_name False \
     --add_task_definition True \
     --num_pos_examples ${pos} \
+    --s_num_pos_examples ${s_pos} \
     --num_neg_examples 0 \
     --add_explanation False \
     --tk_instruct False \
