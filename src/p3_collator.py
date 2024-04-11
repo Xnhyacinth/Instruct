@@ -54,7 +54,7 @@ class DataCollatorForP3:
             return tensor
         
         if not self.args.whitening:
-            sources, targets, options = [], [], []
+            sources, targets, options, tasks = [], [], [], []
             if self.kd:
                 prefixs, instances, s_sources = [], [], []
             for instance in batch:
@@ -81,6 +81,7 @@ class DataCollatorForP3:
 
                 if instance['Task'] in eval:
                     options.append(instance['Instance']['options'])
+                    tasks.append(instance['Task'])
                 
                 if self.student_input:
                     # s_source

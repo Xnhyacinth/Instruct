@@ -46,5 +46,16 @@
 		"super_glue_copa",
 		"hellaswag",
 		"super_glue_wic"
+	],
+	"eval_datasets": [
+		"super_glue_wsc.fixed",
+		"winogrande_winogrande_xl",
+		"super_glue_cb",
+		"super_glue_rte",
+		"anli",
+		"super_glue_copa",
+		"hellaswag",
+		"super_glue_wic",
+		"story_cloze"
 	]
 }

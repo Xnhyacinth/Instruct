@@ -35,6 +35,7 @@ import numpy as np
 from datasets.utils import set_progress_bar_enabled
 from datasets import load_dataset, load_metric
 
+import pandas as pd
 import torch
 import transformers
 from filelock import FileLock
@@ -939,28 +940,28 @@ def main():
         performance_dict = {}
         for dataset in datasets:
             datapoints, predictions = [], []
-            for dp, prediction in zip(self.data, all_predictions):
-                if dp["task"] in dataset: # a temparary hack for boolq vs. boolq-all
+            for dp, prediction in zip(data, all_predictions):
+                if dp["Task"] in dataset:  # a temparary hack for boolq vs. boolq-all
                     datapoints.append(dp)
                     predictions.append(prediction)
             metric, perf = evaluate_a_dataset(dataset, predictions, datapoints)
             performance_dict[dataset] = (metric, perf)
 
-        if len(datasets) > 1: # multitask
+        if len(datasets) > 1:  # multitask
             return performance_dict
-        else: # singletask
+        else:  # singletask
             return metric, perf
 
     def evaluate_a_dataset(dataset_name, predictions, datapoints):
-        is_classification = False 
-        
+        is_classification = False
+
         accs = []
         precisions = defaultdict(list)
         recalls = defaultdict(list)
         for prediction, datapoint in zip(predictions, datapoints):
             prediction = prediction.strip()
             groundtruth = datapoint["output"].strip()
-            is_correct = prediction==groundtruth
+            is_correct = prediction == groundtruth
             accs.append(is_correct)
             if is_classification:
                 recalls[groundtruth].append(is_correct)
@@ -973,24 +974,58 @@ def main():
         for key in recalls:
             precision = np.mean(precisions[key]) if key in precisions else 1.0
             recall = np.mean(recalls[key])
-            if precision+recall==0:
+            if precision+recall == 0:
                 f1s.append(0)
             else:
                 f1s.append(2*precision*recall / (precision+recall))
 
         return "f1", np.mean(f1s)
-    
+
     def compute_p3_metrics(dataset, metadata, preds, save_prefix=None):
         predictions = []
         for idx, dp in enumerate(metadata):
-            curr_instance_losses = [preds[indices] for indices in dp["indices"]]
-            prediction_idx = sorted(enumerate(curr_instance_losses), key=lambda x: x[1])[0][0]
+            curr_instance_losses = [preds[indices]
+                                    for indices in dp["indices"]]
+            prediction_idx = sorted(
+                enumerate(curr_instance_losses), key=lambda x: x[1])[0][0]
             prediction = dp["options"][prediction_idx]
             predictions.append(prediction.strip())
-            
+
         references = list(dict([e['Task'] for e in dataset]))
-        
-        perf = evaluate(metadata, predictions, references)
+
+        perf = evaluate(dataset, predictions, references)
+
+        if save_prefix is not None:
+            df = pd.DataFrame(
+                columns=["task_name", "prompt_name", "performance", "eval_mode"])
+            results_file = os.path.join(training_args.output_dir,
+                         f"{save_prefix}_eval_results.csv")
+            for prompt, (metric, test_perf) in perf.items():
+                task_name = map_prompt_name_to_task_name(prompt, datasets)
+                df.loc[len(df.index)] = [task_name, prompt, test_perf, "rank_classification"]
+
+                # save after each dataset is evaluated
+                df.to_csv(results_file)
+            # aggreate results and get mean/median
+            agg_results_file = os.path.join(config.out_dir, "results_agg_{}.csv".format(save_prefix))
+
+            df = df[['task_name', 'performance']]
+            mean = df.groupby("task_name").mean()
+            median = df.groupby("task_name").median()
+            mean = mean.rename(columns={"performance": "mean"})
+            mean["median"] = median["performance"]
+            mean.to_csv(agg_results_file)
+
+            average_df = pd.DataFrame({'task_name': ['avg_score'],
+                                    'mean': [mean['mean'].mean()],
+                                    'median': [mean['median'].median()]})
+            average_df = average_df.set_index('task_name')
+
+            mean = pd.concat([mean, average_df], ignore_index=False, axis=0)
+            mean.to_csv(agg_results_file)
+        import pdb
+        pdb.set_trace()
+        return perf
 
     # model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     # if model_args.load_hypernet_weights is not None:
@@ -1007,7 +1042,7 @@ def main():
             eval_dataset=eval_dataset if training_args.do_eval else None,
             tokenizer=tokenizer,
             data_collator=data_collator,
-            compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
+            compute_metrics=compute_p3_metrics if training_args.predict_with_generate else None,
             callbacks=[
                 DenserEvalCallback] if training_args.denser_evaluation else None
         )

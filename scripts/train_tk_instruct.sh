@@ -43,8 +43,8 @@ dataset=${23:-"0"}
 do_sample=${24:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
-name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
-output_dir=output_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}
+name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}_${epoch}
+output_dir=output_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}_${epoch}
 extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 task_dir=data/tasks

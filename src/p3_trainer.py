@@ -725,7 +725,7 @@ class P3Trainer(Seq2SeqTrainer):
             loss, logits, labels = self.prediction_step(
                 model, inputs[:4], prediction_loss_only, ignore_keys=ignore_keys)
 
-            loss_list += loss.cpu().detach().numpy().tolist()
+            loss_list += loss.float().cpu().detach().numpy().tolist()
 
             for dp in inputs[4]:
                 n_options = len(dp)
@@ -817,8 +817,10 @@ class P3Trainer(Seq2SeqTrainer):
 
         # Metrics!
         if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
+            import pdb
+            pdb.set_trace()
             metrics = self.compute_metrics(
-                dataset=eval_dataset, metadata=metadata, preds=all_preds, save_prefix=metric_key_prefix)
+                dataset=eval_dataset, metadata=metadata, preds=np.array(loss_list), save_prefix=metric_key_prefix)
         else:
             metrics = {}
 
@@ -891,10 +893,11 @@ class P3Trainer(Seq2SeqTrainer):
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
 
-        output = self.model(
-            **inputs,
-            use_cache=False
-        )
+        with torch.no_grad():
+            output = self.model(
+                **inputs,
+                use_cache=False
+            )
 
         # rank_classification
         lprobs = F.log_softmax(output.logits, dim=-1)
