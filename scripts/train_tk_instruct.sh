@@ -16,8 +16,8 @@ num_gpus=${1:-"1"}
 echo "GPU counts: ${num_gpus}"
 gpus=${2:-"8"}
 echo "GPU: ${gpus}"
-model=${3:-"t5-large"}
-echo "model: ${model}"
+m=${3:-"t5-large"}
+echo "model: ${m}"
 bs=${4:-"4"}
 echo "batch size: ${bs}"
 lr=${5:-"5e-5"}
@@ -44,8 +44,8 @@ dataset=${24:-"0"}
 do_sample=${25:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
-name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}_${epoch}
-output_dir=output_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}_${epoch}
+name=experiment_pos${pos}_pooler-${m}_lr${lr}_warm${warmup_ratio}_${epoch}
+output_dir=output_pos${pos}_pooler/${m}_lr${lr}_warm${warmup_ratio}_${epoch}
 extra_args="--evaluation_strategy no"
 data_dir=data/splits/default
 task_dir=data/tasks
@@ -64,8 +64,8 @@ fi
 if [ "$dataset" == "p3" ];then
     data_dir=data_p3_eval
     task_dir=data_p3
-    name=experiment_p3_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
-    output_dir=output_p3_pos${pos}_pooler/${model}_lr${lr}_warm${warmup_ratio}
+    name=experiment_p3_pos${pos}_pooler-${m}_lr${lr}_warm${warmup_ratio}
+    output_dir=output_p3_pos${pos}_pooler/${m}_lr${lr}_warm${warmup_ratio}
     run_file=run_s2s_kd_ac.py
     max_num_instances=5000
 fi
@@ -79,22 +79,22 @@ if [ "$tune" != "full" ];then
         run_file=run_s2s_kd_ac.py
     fi
 fi
-model=google/${model}-lm-adapt
+model=google/${m}-lm-adapt
 if [ "$tune" == "lora" ];then
     if [ "$allenai" == "allenai" ];then
-        if [ "$model" == "t5-base" ];then
+        if [ "$m" == "t5-base" ];then
             model=allenai/tk-instruct-base-def-pos
             if [ "$pos" == "0" ];then
                 model=output_pos0/t5-base_lr1e-4_warm0.05
             fi
         fi
-        if [ "$model" == "t5-xl" ];then
+        if [ "$m" == "t5-xl" ];then
             model=allenai/tk-instruct-3b-def-pos
             if [ "$pos" == "0" ];then
                 model=allenai/tk-instruct-3b-def 
             fi
         fi
-        if [ "$model" == "t5-xxl" ];then
+        if [ "$m" == "t5-xxl" ];then
             model=allenai/tk-instruct-11b-def-pos
             if [ "$pos" == "0" ];then
                 model=allenai/tk-instruct-11b-def 
@@ -108,20 +108,20 @@ fi
 if [ "$tune" == "kd" ];then
     t_model=output/${model}_lr5e-5
     if [ "$allenai" == "allenai" ];then
-        if [ "$model" == "t5-base" ];then
+        if [ "$m" == "t5-base" ];then
             t_model=allenai/tk-instruct-base-def-pos
             if [ "$pos" == "0" ];then
                 t_model=output_pos0/t5-base_lr1e-4_warm0.05
             fi
         fi
-        if [ "$model" == "t5-xl" ];then
+        if [ "$m" == "t5-xl" ];then
             t_model=allenai/tk-instruct-3b-def-pos
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-3b-def 
             fi
             gradient_accumulation_steps=8
         fi
-        if [ "$model" == "t5-xxl" ];then
+        if [ "$m" == "t5-xxl" ];then
             t_model=allenai/tk-instruct-11b-def-pos
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-11b-def 

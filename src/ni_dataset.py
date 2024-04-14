@@ -130,7 +130,8 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
 
         split_dir = self.config.data_dir
         task_dir = self.config.task_dir
-        data_type = [data_map[self.config.data_type]] if ',' not in self.config.data_type else [data_map[d] for d in self.config.data_type.split(',')]
+        if self.config.data_type is not None:
+            self.config.data_type = [data_map[self.config.data_type]] if ',' not in self.config.data_type else [data_map[d] for d in self.config.data_type.split(',')]
 
         return [
             datasets.SplitGenerator(
@@ -140,7 +141,7 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                     "task_dir": task_dir,
                     "max_num_instances_per_task": self.config.max_num_instances_per_task,
                     "subset": "train",
-                    "data_type": data_type
+                    "data_type": self.config.data_type
                 }),
             datasets.SplitGenerator(
                 name=datasets.Split.VALIDATION,
@@ -149,7 +150,7 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                     "task_dir": task_dir,
                     "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
                     "subset": "dev",
-                    "data_type": data_type
+                    "data_type": self.config.data_type
                 }),
             datasets.SplitGenerator(
                 name=datasets.Split.TEST,
@@ -158,7 +159,7 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                     "task_dir": task_dir,
                     "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
                     "subset": "test",
-                    "data_type": data_type
+                    "data_type": self.config.data_type
                 }),
         ]
 
