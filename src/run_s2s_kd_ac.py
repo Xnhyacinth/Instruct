@@ -859,6 +859,7 @@ def main():
     # Data collator
     model_args.s_num_pos_examples = data_args.s_num_pos_examples
     if "p3" in data_args.data_dir:
+        datasets_list = load_dataset_names('t0', "eval_datasets")
         data_collator = DataCollatorForP3(
             tokenizer,
             padding="max_length" if data_args.pad_to_max_length else "longest",
@@ -909,8 +910,7 @@ def main():
     def compute_ni_metrics(dataset, preds, save_prefix=None):
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         references = [e["Instance"]["output"] for e in dataset]
-        result = compute_metrics(
-            predictions=decoded_preds, references=references)
+        result = compute_metrics(predictions=decoded_preds, references=references)
         result_per_task = compute_grouped_metrics(
             predictions=decoded_preds, references=references, groups=dataset["Task"])
         result.update(result_per_task)
@@ -960,7 +960,7 @@ def main():
         recalls = defaultdict(list)
         for prediction, datapoint in zip(predictions, datapoints):
             prediction = prediction.strip()
-            groundtruth = datapoint["output"].strip()
+            groundtruth = datapoint['Instance']["output"].strip()
             is_correct = prediction == groundtruth
             accs.append(is_correct)
             if is_classification:
@@ -991,7 +991,7 @@ def main():
             prediction = dp["options"][prediction_idx]
             predictions.append(prediction.strip())
 
-        references = list(dict([e['Task'] for e in dataset]))
+        references = list(set([e['Task'] for e in dataset]))
 
         perf = evaluate(dataset, predictions, references)
 
@@ -1001,13 +1001,13 @@ def main():
             results_file = os.path.join(training_args.output_dir,
                          f"{save_prefix}_eval_results.csv")
             for prompt, (metric, test_perf) in perf.items():
-                task_name = map_prompt_name_to_task_name(prompt, datasets)
+                task_name = map_prompt_name_to_task_name(prompt, datasets_list)
                 df.loc[len(df.index)] = [task_name, prompt, test_perf, "rank_classification"]
 
                 # save after each dataset is evaluated
                 df.to_csv(results_file)
             # aggreate results and get mean/median
-            agg_results_file = os.path.join(config.out_dir, "results_agg_{}.csv".format(save_prefix))
+            agg_results_file = os.path.join(training_args.output_dir, "results_agg_{}.csv".format(save_prefix))
 
             df = df[['task_name', 'performance']]
             mean = df.groupby("task_name").mean()
@@ -1023,9 +1023,30 @@ def main():
 
             mean = pd.concat([mean, average_df], ignore_index=False, axis=0)
             mean.to_csv(agg_results_file)
-        import pdb
-        pdb.set_trace()
-        return perf
+    
+        references = [[e["Instance"]["output"]] for e in dataset]
+        result = compute_metrics(predictions=predictions, references=references)
+        result_per_task = compute_grouped_metrics(
+            predictions=predictions, references=references, groups=dataset["Task"])
+        result.update(result_per_task)
+        categories = [map_prompt_name_to_task_name(it, datasets_list) for it in dataset["Task"]]
+        result_per_category = compute_grouped_metrics(
+            predictions=predictions, references=references, groups=categories)
+        result.update(result_per_category)
+        prediction_lens = [np.count_nonzero(
+            pred != tokenizer.pad_token_id) for pred in preds]
+        result["gen_len"] = np.mean(prediction_lens)
+        result = {k: round(v, 4) for k, v in result.items()}
+        if save_prefix is not None:
+            with open(os.path.join(training_args.output_dir, f"{save_prefix}_eval_predictions.jsonl"), "w") as fout:
+                for example, pred in zip(dataset, predictions):
+                    fout.write(json.dumps({
+                        "Task": example["Task"],
+                        "Instance": example["Instance"],
+                        "Prediction": pred
+                    }) + "\n")
+
+        return result
 
     # model = T5LoraWrapper(model, model_args.r, model_args.load_hypernet_weights, model_args)
     # if model_args.load_hypernet_weights is not None:

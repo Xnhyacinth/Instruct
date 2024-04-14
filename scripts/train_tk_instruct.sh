@@ -39,8 +39,9 @@ hyper=${19:-"0"}
 ko=${20:-"0"}
 prefix=${21:-"0"}
 gpt=${22:-"0"}
-dataset=${23:-"0"}
-do_sample=${24:-"0"}
+data_type=${23:-"0"}
+dataset=${24:-"0"}
+do_sample=${25:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}_${epoch}
@@ -51,6 +52,7 @@ task_dir=data/tasks
 run_file=run_s2s.py
 max_num_instances=500
 gradient_accumulation_steps=2
+
 if [ "$e" == "eval" ];then
     cache="./cache_eval"
     name="${name}-eval"
@@ -60,7 +62,6 @@ if [ "$e" == "eval" ];then
     echo name: ${name}
 fi
 if [ "$dataset" == "p3" ];then
-    config_files=0
     data_dir=data_p3_eval
     task_dir=data_p3
     name=experiment_p3_pos${pos}_pooler-${model}_lr${lr}_warm${warmup_ratio}
@@ -68,6 +69,7 @@ if [ "$dataset" == "p3" ];then
     run_file=run_s2s_kd_ac.py
     max_num_instances=5000
 fi
+
 if [ "$tune" != "full" ];then
     name="${name}-${tune}_r${r}"
     output_dir="${output_dir}_${tune}_r${r}"
@@ -77,6 +79,32 @@ if [ "$tune" != "full" ];then
         run_file=run_s2s_kd_ac.py
     fi
 fi
+model=google/${model}-lm-adapt
+if [ "$tune" == "lora" ];then
+    if [ "$allenai" == "allenai" ];then
+        if [ "$model" == "t5-base" ];then
+            model=allenai/tk-instruct-base-def-pos
+            if [ "$pos" == "0" ];then
+                model=output_pos0/t5-base_lr1e-4_warm0.05
+            fi
+        fi
+        if [ "$model" == "t5-xl" ];then
+            model=allenai/tk-instruct-3b-def-pos
+            if [ "$pos" == "0" ];then
+                model=allenai/tk-instruct-3b-def 
+            fi
+        fi
+        if [ "$model" == "t5-xxl" ];then
+            model=allenai/tk-instruct-11b-def-pos
+            if [ "$pos" == "0" ];then
+                model=allenai/tk-instruct-11b-def 
+            fi
+        fi
+        name="${name}_allenai"
+        output_dir="${output_dir}_allenai"
+    fi
+fi
+
 if [ "$tune" == "kd" ];then
     t_model=output/${model}_lr5e-5
     if [ "$allenai" == "allenai" ];then
@@ -100,6 +128,10 @@ if [ "$tune" == "kd" ];then
             fi
             gradient_accumulation_steps=4
             max_num_instances=300
+            if [ "$warmup_ratio" == "0.02" ];then
+                gradient_accumulation_steps=2
+                max_num_instances=200
+            fi
         fi
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
@@ -164,6 +196,7 @@ if [ "$tune" == "kd" ];then
         name="${name}_s_pos${s_pos}"
         output_dir="${output_dir}_s_pos${s_pos}"
     fi
+    extra_args="${extra_args} --s_num_pos_examples ${s_pos}"
     if [ "$custom" == "custom" ];then
         name="${name}_custom"
         output_dir="${output_dir}_custom"
@@ -180,13 +213,21 @@ if [ "$do_sample" == "sample" ];then
     output_dir="${output_dir}_sample"
     extra_args="${extra_args} --do_sample True"
 fi
+
+if [ "$data_type" != "0" ];then
+    # sed 's/[ ][ ]*/_/g' <<< $data_type
+    name="${name}_$data_type"
+    output_dir="output_meta/$data_type/${output_dir}"
+    extra_args="${extra_args} --data_type $data_type"
+    max_num_instances=10000
+fi
 echo name: ${name}
 echo run_file: ${run_file}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --do_train \
     --do_predict \
     --predict_with_generate \
-    --model_name_or_path google/${model}-lm-adapt \
+    --model_name_or_path ${model} \
     --max_source_length 1024 \
     --max_target_length 128 \
     --generation_max_length 128 \
@@ -195,7 +236,6 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --add_task_name False \
     --add_task_definition True \
     --num_pos_examples ${pos} \
-    --s_num_pos_examples ${s_pos} \
     --num_neg_examples 0 \
     --add_explanation False \
     --tk_instruct False \
@@ -210,7 +250,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --gradient_accumulation_steps ${gradient_accumulation_steps} \
     --pad_to_max_length False \
     --learning_rate ${lr} \
-    --num_train_epochs 5.0 \
+    --num_train_epochs 3.0 \
     --max_steps ${epoch} \
     --lr_scheduler_type constant \
     --warmup_ratio ${warmup_ratio} \

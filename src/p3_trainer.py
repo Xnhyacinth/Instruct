@@ -734,7 +734,7 @@ class P3Trainer(Seq2SeqTrainer):
                     "options": dp,
                 })
                 start_idx += n_options
-
+            
             if is_torch_tpu_available():
                 xm.mark_step()
 
@@ -817,8 +817,6 @@ class P3Trainer(Seq2SeqTrainer):
 
         # Metrics!
         if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
-            import pdb
-            pdb.set_trace()
             metrics = self.compute_metrics(
                 dataset=eval_dataset, metadata=metadata, preds=np.array(loss_list), save_prefix=metric_key_prefix)
         else:

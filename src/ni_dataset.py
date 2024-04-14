@@ -42,13 +42,26 @@ through an iterative peer review process to ensure their quality.
 
 _URL = "https://instructions.apps.allenai.org/"
 
+with open('src/data_dict.json', 'r') as f:
+    data_dict = json.load(f)
+    data_map = data_dict['data_map']
+# data_map = {
+#     'QA': 'Question Answering', # 310000
+#     'Translation': 'Translation', # 1100
+#     'PE': 'Program Execution',
+#     'QG': 'Question Generation',
+#     'SA': 'Sentiment Analysis',
+#     'TC': 'Text Categorization',
+#     'TM': 'Text Matching',
+# }
 
 class NIConfig(datasets.BuilderConfig):
-    def __init__(self, *args, task_dir=None, max_num_instances_per_task=None, max_num_instances_per_eval_task=None, **kwargs):
+    def __init__(self, *args, task_dir=None, max_num_instances_per_task=None, max_num_instances_per_eval_task=None, data_type=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.task_dir: str = task_dir
         self.max_num_instances_per_task: int = max_num_instances_per_task
         self.max_num_instances_per_eval_task: int = max_num_instances_per_eval_task
+        self.data_type = data_type
 
 
 class NaturalInstructions(datasets.GeneratorBasedBuilder):
@@ -117,6 +130,7 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
 
         split_dir = self.config.data_dir
         task_dir = self.config.task_dir
+        data_type = [data_map[self.config.data_type]] if ',' not in self.config.data_type else [data_map[d] for d in self.config.data_type.split(',')]
 
         return [
             datasets.SplitGenerator(
@@ -125,7 +139,8 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                     "path": os.path.join(split_dir, "train_tasks.txt"),
                     "task_dir": task_dir,
                     "max_num_instances_per_task": self.config.max_num_instances_per_task,
-                    "subset": "train"
+                    "subset": "train",
+                    "data_type": data_type
                 }),
             datasets.SplitGenerator(
                 name=datasets.Split.VALIDATION,
@@ -133,7 +148,8 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                     "path": os.path.join(split_dir, "dev_tasks.txt"),
                     "task_dir": task_dir,
                     "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
-                    "subset": "dev"
+                    "subset": "dev",
+                    "data_type": data_type
                 }),
             datasets.SplitGenerator(
                 name=datasets.Split.TEST,
@@ -141,11 +157,12 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                     "path": os.path.join(split_dir, "test_tasks.txt"),
                     "task_dir": task_dir,
                     "max_num_instances_per_task": self.config.max_num_instances_per_eval_task,
-                    "subset": "test"
+                    "subset": "test",
+                    "data_type": data_type
                 }),
         ]
 
-    def _generate_examples(self, path=None, task_dir=None, max_num_instances_per_task=None, subset=None):
+    def _generate_examples(self, path=None, task_dir=None, max_num_instances_per_task=None, subset=None, data_type=None):
         """Yields examples."""
         logger.info(f"Generating tasks from = {path}")
         with open(path, encoding="utf-8") as split_f:
@@ -165,6 +182,10 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
                         # so, we use them here
                         instances = all_instances[:100]
                     else:
+                        if data_type is not None:
+                            Categories = task_data.get("Categories", [])
+                            if Categories[0] not in data_type:
+                                continue
                         instances = all_instances
                     if max_num_instances_per_task is not None and max_num_instances_per_task >= 0:
                         random.shuffle(instances)

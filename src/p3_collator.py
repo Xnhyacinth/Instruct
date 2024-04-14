@@ -32,18 +32,17 @@ class DataCollatorForP3:
     attention_masks: dict = None
     args: dict = None
     student_input: bool = False
-    
 
     def __call__(self, batch, return_tensors=None):
 
         if return_tensors is None:
             return_tensors = self.return_tensors
-        
+
         def pad_tokens(lst, max_len, pad_id=None):
             # everything is padding token in the beginning
             if pad_id is None:
                 pad_id = self.tokenizer.pad_token_id
-                
+
             tensor = torch.ones(len(lst), max_len, dtype=torch.long) * pad_id
             # then fill each example into this big tensor
             for i, item in enumerate(lst):
@@ -52,9 +51,9 @@ class DataCollatorForP3:
                 else:
                     tensor[i, :len(item)] = torch.LongTensor(item)
             return tensor
-        
+
         if not self.args.whitening:
-            sources, targets, options, tasks = [], [], [], []
+            sources, targets, options = [], [], []
             if self.kd:
                 prefixs, instances, s_sources = [], [], []
             for instance in batch:
@@ -66,42 +65,53 @@ class DataCollatorForP3:
                 # task_output += "Output: "
                 # input_prefix = self.tokenizer(task_input, add_special_tokens=False)["input_ids"]
                 # output_prefix = self.tokenizer(task_output, add_special_tokens=False)["input_ids"]
-                
-                if 'story_cloze' in instance['Task']:
-                    source = self.tokenizer(instance['Instance']['input'])["input_ids"]
-                    targets.append(self.tokenizer(instance['Instance']['output'])["input_ids"])
+
+                if instance['Task'] in eval:
+                    inputs = [instance['Instance']["input"]] * len(instance['Instance']["options"])
+                    outputs = instance['Instance']["options"]
+                    # source = self.tokenizer(instance['Instance']['input'])["input_ids"]
+                    # targets.append(self.tokenizer(instance['Instance']['output'])["input_ids"])
+                    tokenized_input = self.tokenizer.batch_encode_plus(inputs,
+                                                        padding='max_length',
+                                                        truncation=True,
+                                                        max_length=self.max_source_length,
+                                                        add_special_tokens=False)
+                    tokenized_output = self.tokenizer.batch_encode_plus(outputs,
+                                                        padding='max_length',
+                                                        truncation=True,
+                                                        max_length=self.max_source_length,
+                                                        add_special_tokens=True)
+                    sources += tokenized_input["input_ids"]
+                    targets += tokenized_output["input_ids"]
+                    
+                    options.append(instance['Instance']['options'])
                 else:
                     source = instance["Instance"]["input_tokenized"]
                     targets.append(instance["Instance"]["output_tokenized"])
-                
-                if len(source) <= self.max_source_length:
-                    sources.append(source)
-                else:
-                    sources.append(source[:self.max_source_length])
 
-                if instance['Task'] in eval:
-                    options.append(instance['Instance']['options'])
-                    tasks.append(instance['Task'])
-                
-                if self.student_input:
-                    # s_source
-                    pass
-                
-                if self.kd:
-                    # prefix
-                    pass
-                    
-                if self.args.custom_model:
-                    # instance
-                    pass
-                
+                    if len(source) <= self.max_source_length:
+                        sources.append(source)
+                    else:
+                        sources.append(source[:self.max_source_length])
+
+                    if self.student_input:
+                        # s_source
+                        pass
+
+                    if self.kd:
+                        # prefix
+                        pass
+
+                    if self.args.custom_model:
+                        # instance
+                        pass
+
         else:
-           pass
-        
+            pass
+
         input_ids = pad_tokens(sources, max_len=self.max_source_length)
         attention_mask = input_ids.ne(self.tokenizer.pad_token_id).long()
         decoder_input_ids = pad_tokens(targets, max_len=self.max_target_length)
         decoder_attention_mask = decoder_input_ids.ne(self.tokenizer.pad_token_id).long()
 
         return input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, options
-        

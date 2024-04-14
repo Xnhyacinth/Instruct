@@ -32,6 +32,7 @@ import numpy as np
 from datasets.utils import set_progress_bar_enabled
 from datasets import load_dataset, load_metric
 
+import torch
 import transformers
 from filelock import FileLock
 from transformers import (
@@ -68,7 +69,8 @@ except (LookupError, OSError):
         nltk.download("punkt", quiet=True)
 
 # A list of all multilingual tokenizer which require lang attribute.
-MULTILINGUAL_TOKENIZERS = [MBartTokenizer, MBartTokenizerFast, MBart50Tokenizer, MBart50TokenizerFast]
+MULTILINGUAL_TOKENIZERS = [
+    MBartTokenizer, MBartTokenizerFast, MBart50Tokenizer, MBart50TokenizerFast]
 
 
 @dataclass
@@ -78,7 +80,8 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+        metadata={
+            "help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
@@ -88,15 +91,18 @@ class ModelArguments:
     )
     cache_dir: Optional[str] = field(
         default=None,
-        metadata={"help": "Where to store the pretrained models downloaded from huggingface.co"},
+        metadata={
+            "help": "Where to store the pretrained models downloaded from huggingface.co"},
     )
     use_fast_tokenizer: bool = field(
         default=True,
-        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
+        metadata={
+            "help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
     )
     model_revision: str = field(
         default="main",
-        metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
+        metadata={
+            "help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
     use_auth_token: bool = field(
         default=False,
@@ -117,8 +123,34 @@ class ModelArguments:
         metadata={
             "help": "The lora rank of the model. If the model is not a lora model, this argument will be ignored."
         },
-        )
-    
+    )
+    whitening: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use whitening algorithm."
+        },
+    )
+    custom_model: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use concat for input."
+        },
+    )
+    do_sample: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to do_sample."
+        },
+    )
+    hyperencoder: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to do_sample."
+        },
+    )
+    pooling: Optional[str] = field(
+        default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
+    )
 
 
 @dataclass
@@ -126,7 +158,8 @@ class DataTrainingArguments:
     """
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
-    lang: str = field(default=None, metadata={"help": "Language id for multilingual model."})
+    lang: str = field(default=None, metadata={
+                      "help": "Language id for multilingual model."})
     data_dir: str = field(
         default=None, metadata={"help": "The directory for saving the NaturalInstructions train/dev/test splits."}
     )
@@ -220,7 +253,8 @@ class DataTrainingArguments:
     )
     add_task_definition: Optional[bool] = field(
         default=True,
-        metadata={"help": "whether to preappend task definition before the task input."}
+        metadata={
+            "help": "whether to preappend task definition before the task input."}
     )
     num_pos_examples: Optional[int] = field(
         default=0,
@@ -232,17 +266,21 @@ class DataTrainingArguments:
     )
     add_explanation: Optional[bool] = field(
         default=False,
-        metadata={"help": "whether to add explanation for both the postive examples and negtive examples."}
+        metadata={
+            "help": "whether to add explanation for both the postive examples and negtive examples."}
     )
     tk_instruct: Optional[bool] = field(
         default=False,
-        metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."} 
+        metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."}
     )
     alpha_kd: Optional[int] = field(
         default=0.4,
         metadata={"help": "weights of KD loss."}
     )
-    
+    data_type: Optional[str] = field(
+        default=None, metadata={"help": "The task type of model."}
+    )
+
     def __post_init__(self):
         pass
 
@@ -251,9 +289,11 @@ class DataTrainingArguments:
 class NITrainingArguments(Seq2SeqTrainingArguments):
     denser_evaluation: Optional[bool] = field(
         default=False,
-        metadata={"help": "If specifid, the model will do more evaluation at the beginning of training."}
+        metadata={
+            "help": "If specifid, the model will do more evaluation at the beginning of training."}
     )
-    do_demo: bool = field(default=False, metadata={"help": "Whether to run the model as a demo in the terminal."})
+    do_demo: bool = field(default=False, metadata={
+                          "help": "Whether to run the model as a demo in the terminal."})
 
 
 def main():
@@ -261,11 +301,13 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, NITrainingArguments))
+    parser = HfArgumentParser(
+        (ModelArguments, DataTrainingArguments, NITrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_args, data_args, training_args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
@@ -278,7 +320,7 @@ def main():
             o.write(f'{k} = {v}\n')
         for k, v in sorted(data_args.__dict__.items(), key=lambda x: x[0]):
             o.write(f'{k} = {v}\n')
-    
+
     # Setup logging
     logging.basicConfig(
         filename=os.path.join(training_args.output_dir, "training.log"),
@@ -332,12 +374,13 @@ def main():
 
     # Get the NaturalInstructions dataset
     raw_datasets = load_dataset(
-        "src/ni_dataset.py", 
-        data_dir=data_args.data_dir, 
-        task_dir=data_args.task_dir, 
+        "src/ni_dataset.py",
+        data_dir=data_args.data_dir,
+        task_dir=data_args.task_dir,
         cache_dir=model_args.cache_dir,
         max_num_instances_per_task=data_args.max_num_instances_per_task,
-        max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
+        max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task,
+        data_type=data_args.data_type
     )
 
     # Load pretrained model and tokenizer
@@ -376,7 +419,8 @@ def main():
     )
     model = get_peft_model(model, lora_config)
     trainable_params, all_param = model.get_nb_trainable_parameters()
-    logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+    logger.info(
+        f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     model.print_trainable_parameters()
     model.resize_token_embeddings(len(tokenizer))
 
@@ -384,10 +428,12 @@ def main():
         if isinstance(tokenizer, MBartTokenizer):
             model.config.decoder_start_token_id = tokenizer.lang_code_to_id[data_args.lang]
         else:
-            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(data_args.lang)
+            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(
+                data_args.lang)
 
     if model.config.decoder_start_token_id is None:
-        raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
+        raise ValueError(
+            "Make sure that `config.decoder_start_token_id` is correctly defined")
 
     if (
         hasattr(model.config, "max_position_embeddings")
@@ -423,7 +469,6 @@ def main():
         )
         model.config.forced_bos_token_id = forced_bos_token_id
 
-
     if training_args.label_smoothing_factor > 0 and not hasattr(model, "prepare_decoder_input_ids_from_labels"):
         logger.warning(
             "label_smoothing is enabled but the `prepare_decoder_input_ids_from_labels` method is not defined for"
@@ -435,24 +480,28 @@ def main():
             raise ValueError("--do_train requires a train dataset")
         train_dataset = raw_datasets["train"]
         if data_args.max_train_samples is not None:
-            train_dataset = train_dataset.select(range(data_args.max_train_samples))
+            train_dataset = train_dataset.select(
+                range(data_args.max_train_samples))
 
     if training_args.do_eval:
         if "validation" not in raw_datasets:
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = raw_datasets["validation"]
         if data_args.max_eval_samples is not None:
-            eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
+            eval_dataset = eval_dataset.select(
+                range(data_args.max_eval_samples))
 
     if training_args.do_predict:
         if "test" not in raw_datasets:
             raise ValueError("--do_predict requires a test dataset")
         predict_dataset = raw_datasets["test"]
         if data_args.max_predict_samples is not None:
-            predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
+            predict_dataset = predict_dataset.select(
+                range(data_args.max_predict_samples))
 
     # Data collator
-    label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
+    label_pad_token_id = - \
+        100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
     data_collator = DataCollatorForNI(
         tokenizer,
         model=model,
@@ -466,24 +515,30 @@ def main():
         num_pos_examples=data_args.num_pos_examples,
         num_neg_examples=data_args.num_neg_examples,
         add_explanation=data_args.add_explanation,
-        tk_instruct=data_args.tk_instruct
+        tk_instruct=data_args.tk_instruct,
+        args=model_args
     )
-    # we don't want to remove unused columns because we will prepare each batch during training, 
+    # we don't want to remove unused columns because we will prepare each batch during training,
     # and some of the information will aslo be used in evaluation.
-    training_args.remove_unused_columns = False 
+    training_args.remove_unused_columns = False
 
     # Metric
 
     def compute_ni_metrics(dataset, preds, save_prefix=None):
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         references = [e["Instance"]["output"] for e in dataset]
-        result = compute_metrics(predictions=decoded_preds, references=references)
-        result_per_task = compute_grouped_metrics(predictions=decoded_preds, references=references, groups=dataset["Task"])
+        result = compute_metrics(
+            predictions=decoded_preds, references=references)
+        result_per_task = compute_grouped_metrics(
+            predictions=decoded_preds, references=references, groups=dataset["Task"])
         result.update(result_per_task)
-        categories = ["_".join(it[0].lower().split()) for it in dataset["Categories"]]
-        result_per_category = compute_grouped_metrics(predictions=decoded_preds, references=references, groups=categories)
+        categories = ["_".join(it[0].lower().split())
+                      for it in dataset["Categories"]]
+        result_per_category = compute_grouped_metrics(
+            predictions=decoded_preds, references=references, groups=categories)
         result.update(result_per_category)
-        prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
+        prediction_lens = [np.count_nonzero(
+            pred != tokenizer.pad_token_id) for pred in preds]
         result["gen_len"] = np.mean(prediction_lens)
         result = {k: round(v, 4) for k, v in result.items()}
         if save_prefix is not None:
@@ -506,7 +561,8 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
-        callbacks=[DenserEvalCallback] if training_args.denser_evaluation else None
+        callbacks=[
+            DenserEvalCallback] if training_args.denser_evaluation else None
     )
 
     all_metrics = {"run_name": training_args.run_name}
@@ -523,7 +579,8 @@ def main():
 
         metrics = train_result.metrics
         max_train_samples = (
-            data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
+            data_args.max_train_samples if data_args.max_train_samples is not None else len(
+                train_dataset)
         )
         metrics["train_samples"] = min(max_train_samples, len(train_dataset))
 
@@ -531,6 +588,27 @@ def main():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
+        param_tensor_qv_A, param_tensor_A = [], []
+        param_tensor_qv_B, param_tensor_B = [], []
+        for n in model.state_dict().keys():
+            if 'lora_A' in n and ('.q.' in n or '.k.' in n or '.v.' in n or '.o.' in n):
+                param_tensor_A.append(model.state_dict()[n].unsqueeze(0))
+                if '.q.' in n or '.v.' in n:
+                    param_tensor_qv_A.append(model.state_dict()[n].unsqueeze(0))
+            if 'lora_B' in n and ('.q.' in n or '.k.' in n or '.v.' in n or '.o.' in n):
+                param_tensor_B.append(model.state_dict()[n].unsqueeze(0))
+                if '.q.' in n or '.v.' in n:
+                    param_tensor_qv_B.append(model.state_dict()[n].unsqueeze(0))
+
+        ps = {
+            'param_tensor_A': torch.cat(param_tensor_A, dim=0).tolist(),
+            'param_tensor_B': torch.cat(param_tensor_B, dim=0).tolist(),
+            'param_tensor_qv_A': torch.cat(param_tensor_qv_A, dim=0).tolist(),
+            'param_tensor_qv_B': torch.cat(param_tensor_qv_B, dim=0).tolist()
+        }
+        with open(os.path.join(training_args.output_dir, "param_tensors.json"), "w") as fout:
+            json.dump(ps, fout, indent=4)
+        
         all_metrics.update(metrics)
 
     # Evaluation
@@ -544,8 +622,10 @@ def main():
 
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
-        metrics = trainer.evaluate(max_length=max_length, num_beams=num_beams, metric_key_prefix="eval")
-        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
+        metrics = trainer.evaluate(
+            max_length=max_length, num_beams=num_beams, metric_key_prefix="eval")
+        max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(
+            eval_dataset)
         metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
 
         trainer.log_metrics("eval", metrics)
@@ -561,9 +641,11 @@ def main():
         )
         metrics = predict_results.metrics
         max_predict_samples = (
-            data_args.max_predict_samples if data_args.max_predict_samples is not None else len(predict_dataset)
+            data_args.max_predict_samples if data_args.max_predict_samples is not None else len(
+                predict_dataset)
         )
-        metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
+        metrics["predict_samples"] = min(
+            max_predict_samples, len(predict_dataset))
 
         trainer.log(metrics)
         trainer.log_metrics("predict", metrics)
@@ -580,7 +662,8 @@ def main():
                 # output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
                 # with open(output_prediction_file, "w") as writer:
                 #     writer.write("\n".join(predictions))
-                output_prediction_file = os.path.join(training_args.output_dir, "predicted_examples.jsonl")
+                output_prediction_file = os.path.join(
+                    training_args.output_dir, "predicted_examples.jsonl")
                 with open(output_prediction_file, "w") as fout:
                     for example, prediction in zip(predict_dataset, predictions):
                         example["prediction"] = prediction
@@ -596,12 +679,15 @@ def main():
         trainer._max_length = max_length
         trainer._num_beams = num_beams
         while True:
-            user_input = input("Please enter your input to the model, or enter 'quit' to exit: ")
+            user_input = input(
+                "Please enter your input to the model, or enter 'quit' to exit: ")
             if user_input.lower() == "quit":
                 break
             inputs = tokenizer([user_input], return_tensors="pt")
-            _, preds, _ = trainer.prediction_step(model, inputs=inputs, prediction_loss_only=False)
-            print(f"Model generates: {tokenizer.decode(preds[0], skip_special_tokens=True)}\n\n")
+            _, preds, _ = trainer.prediction_step(
+                model, inputs=inputs, prediction_loss_only=False)
+            print(
+                f"Model generates: {tokenizer.decode(preds[0], skip_special_tokens=True)}\n\n")
 
     return results
 

@@ -43,3 +43,43 @@ model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_do
 #             't5-large', resume_download=True
 #         )
 # print(a.config.d_model)
+
+
+
+# import os
+# import json
+# from collections import defaultdict
+# path = 'data/splits/default/train_tasks.txt'
+# task_dir = 'data/tasks'
+# data_dict = defaultdict(int)
+# with open(path, encoding="utf-8") as split_f:
+#     for line in split_f:
+#         task_name = line.strip()
+#         task_path = os.path.join(task_dir, task_name + ".json")
+#         with open(task_path, encoding="utf-8") as task_f:
+#             s = task_f.read()
+#             task_data = json.loads(s)
+#             data_dict[task_data['Categories'][0]] += 1
+# # path = 'data/splits/default/test_tasks.txt'
+# # with open(path, encoding="utf-8") as split_f:
+# #     for line in split_f:
+# #         task_name = line.strip()
+# #         task_path = os.path.join(task_dir, task_name + ".json")
+# #         with open(task_path, encoding="utf-8") as task_f:
+# #             s = task_f.read()
+# #             task_data = json.loads(s)
+# #             data_dict.append(task_data['Categories'])
+# # data_dict = list(set(data_dict))
+
+# ds = {}
+# for d in data_dict.keys():
+#     dd = d.split(' ')
+#     ddd = ''
+#     for x in dd:
+#         ddd += x[0]
+#     if len(dd) > 1:
+#         ds[ddd] = d
+#     else:
+#         ds[d] = d
+# with open('src/data_dict.json', 'w') as f:
+#     json.dump({"data_map": ds, "data_num": data_dict}, f, indent=4)
