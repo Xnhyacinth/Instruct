@@ -148,6 +148,70 @@ class NIKDTrainer(Seq2SeqTrainer):
         ]
         return sum(loss_a) / len(loss_a)
     
+    def cal_loramse(self, model, lora_A, lora_B):
+        param_tensor_A, param_tensor_B = [], []
+        model = model.module if hasattr(model, "module") else model
+        for i, l in enumerate(model.encoder.block): # qkvo
+            l = l.module if hasattr(l, "module") else l
+            if 'ko' in model.config.name:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.k.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.o.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.k.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.o.lora_B.unsqueeze(1))
+            else:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+        for i, l in enumerate(model.decoder.block): # qkvo
+            l = l.module if hasattr(l, "module") else l
+            if 'ko' in model.config.name:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.k.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.o.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.k.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.o.lora_B.unsqueeze(1))
+                
+                # EncDecAttention
+                param_tensor_A.append(l.layer[1].EncDecAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.k.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.v.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.o.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[1].EncDecAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.k.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.v.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.o.lora_B.unsqueeze(1))
+            else:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+                
+                # EncDecAttention
+                param_tensor_A.append(l.layer[1].EncDecAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.v.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[1].EncDecAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.v.lora_B.unsqueeze(1))
+        
+        param_tensor_A = torch.cat(param_tensor_A, dim=1)
+        param_tensor_B = torch.cat(param_tensor_B, dim=1)
+
+        return (F.mse_loss(param_tensor_A, lora_B) + F.mse_loss(param_tensor_B, lora_A)) * 1000
+        
+    
     def compute_loss(self, model, inputs, return_outputs=False):
         # forward pass
         self.t_model.eval()
@@ -166,6 +230,10 @@ class NIKDTrainer(Seq2SeqTrainer):
         # prefix_encodings = self.get_features(inputs[1])
         # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
         input = inputs[1]
+        if self.config.loramse:
+            lora_A = input.pop('lora_A').to(torch.bfloat16)
+            lora_B = input.pop('lora_B').to(torch.bfloat16)
+
         outputs = model(**input, return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
         loss = outputs.get("loss")
         logits = outputs.get("logits")
@@ -183,6 +251,10 @@ class NIKDTrainer(Seq2SeqTrainer):
             loss += self.cal_attn(outputs.get("encoder_attentions"), t_outputs.get("encoder_attentions")) * 1000
             loss += self.cal_attn(outputs.get("decoder_attentions"), t_outputs.get("decoder_attentions")) * 10
             loss = loss.to(torch.bfloat16)
+        if self.config.loramse:
+            loss_lora = self.cal_loramse(model, lora_A, lora_B)
+            loss += torch.sigmoid(loss_lora) * loss_lora
+            
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()
         # loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))

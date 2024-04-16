@@ -40,8 +40,9 @@ ko=${20:-"0"}
 prefix=${21:-"0"}
 gpt=${22:-"0"}
 data_type=${23:-"0"}
-dataset=${24:-"0"}
-do_sample=${25:-"0"}
+loramse=${24:-"0"}
+dataset=${25:-"0"}
+do_sample=${26:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}_pooler-${m}_lr${lr}_warm${warmup_ratio}_${epoch}
@@ -93,15 +94,29 @@ if [ "$tune" == "lora" ];then
             if [ "$pos" == "0" ];then
                 model=allenai/tk-instruct-3b-def 
             fi
+            gradient_accumulation_steps=8
         fi
         if [ "$m" == "t5-xxl" ];then
             model=allenai/tk-instruct-11b-def-pos
             if [ "$pos" == "0" ];then
                 model=allenai/tk-instruct-11b-def 
             fi
+            gradient_accumulation_steps=4
+            max_num_instances=300
+            if [ "$warmup_ratio" == "0.02" ];then
+                gradient_accumulation_steps=2
+                max_num_instances=200
+            fi
         fi
         name="${name}_allenai"
         output_dir="${output_dir}_allenai"
+    fi
+    if [ "$data_type" != "0" ];then
+        # sed 's/[ ][ ]*/_/g' <<< $data_type
+        name="${name}_$data_type"
+        output_dir="output_meta/$data_type/${output_dir}"
+        extra_args="${extra_args} --data_type $data_type"
+        max_num_instances=10000
     fi
 fi
 
@@ -127,7 +142,7 @@ if [ "$tune" == "kd" ];then
                 t_model=allenai/tk-instruct-11b-def 
             fi
             gradient_accumulation_steps=4
-            max_num_instances=300
+            max_num_instances=250
             if [ "$warmup_ratio" == "0.02" ];then
                 gradient_accumulation_steps=2
                 max_num_instances=200
@@ -207,20 +222,28 @@ if [ "$tune" == "kd" ];then
         output_dir="${output_dir}_hyper"
         extra_args="${extra_args} --hyperencoder True"
     fi
+    if [ "$loramse" == "loramse" ];then
+        name="${name}_loramse"
+        output_dir="${output_dir}_loramse"
+        extra_args="${extra_args} --loramse True"
+    fi
+    if [ "$data_type" != "0" ];then
+        # sed 's/[ ][ ]*/_/g' <<< $data_type
+        name="${name}_$data_type"
+        output_dir="${output_dir}_$data_type"
+        extra_args="${extra_args} --data_type $data_type"
+        max_num_instances=1200
+    fi
 fi
 if [ "$do_sample" == "sample" ];then
     name="${name}_sample"
     output_dir="${output_dir}_sample"
     extra_args="${extra_args} --do_sample True"
 fi
-
-if [ "$data_type" != "0" ];then
-    # sed 's/[ ][ ]*/_/g' <<< $data_type
-    name="${name}_$data_type"
-    output_dir="output_meta/$data_type/${output_dir}"
-    extra_args="${extra_args} --data_type $data_type"
-    max_num_instances=10000
+if [ "$epoch" != "3" ];then
+    extra_args="${extra_args} --max_steps ${epoch} "
 fi
+
 echo name: ${name}
 echo run_file: ${run_file}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
@@ -250,8 +273,7 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --gradient_accumulation_steps ${gradient_accumulation_steps} \
     --pad_to_max_length False \
     --learning_rate ${lr} \
-    --num_train_epochs 3.0 \
-    --max_steps ${epoch} \
+    --num_train_epochs ${epoch} \
     --lr_scheduler_type constant \
     --warmup_ratio ${warmup_ratio} \
     --logging_strategy steps \

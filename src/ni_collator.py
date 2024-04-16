@@ -3,9 +3,21 @@ import random
 import string
 import torch
 from transformers.data.data_collator import *
+import json
+import os
 
 logger = logging.getLogger(__name__)
 
+with open('src/data_dict.json', 'r') as f:
+    data_dict = json.load(f)
+    data_map = data_dict['data_map']
+lora_dict = {}
+for file in os.listdir('output_meta'):
+    try:
+        with open(f'output_meta/{file}/output_pos2_pooler/param_tensors.json', 'r') as f:
+            lora_dict[data_map[file]] = json.load(f)
+    except:
+        pass
 
 @dataclass
 class DataCollatorForNI:
@@ -31,7 +43,6 @@ class DataCollatorForNI:
     attention_masks: dict = None
     args: dict = None
     student_input: bool = False
-    
 
     def __call__(self, batch, return_tensors=None):
 
@@ -42,19 +53,25 @@ class DataCollatorForNI:
             sources = []
             if self.kd:
                 prefixs, instances, s_sources = [], [], []
+                lora_A_params, lora_B_params = [], []
             for instance in batch:
                 if self.tk_instruct:
                     all_valid_encodings = [
                         # instruction only
-                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 0, "num_neg_examples": 0, "add_explanation": False}, 
+                        {"add_task_name": False, "add_task_definition": True,
+                            "num_pos_examples": 0, "num_neg_examples": 0, "add_explanation": False},
                         # example only
-                        {"add_task_name": False, "add_task_definition": False, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False}, 
+                        {"add_task_name": False, "add_task_definition": False,
+                            "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False},
                         # instruction + pos examples
-                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False}, 
-                        # instruction + pos examples + neg examples 
-                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 2, "add_explanation": False},
-                        # instruction + pos (w. explanation) 
-                        {"add_task_name": False, "add_task_definition": True, "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": True}, 
+                        {"add_task_name": False, "add_task_definition": True,
+                            "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": False},
+                        # instruction + pos examples + neg examples
+                        {"add_task_name": False, "add_task_definition": True,
+                            "num_pos_examples": 2, "num_neg_examples": 2, "add_explanation": False},
+                        # instruction + pos (w. explanation)
+                        {"add_task_name": False, "add_task_definition": True,
+                            "num_pos_examples": 2, "num_neg_examples": 0, "add_explanation": True},
                     ]
                     encoding_schema = random.choice(all_valid_encodings)
                     add_task_name = encoding_schema["add_task_name"]
@@ -67,7 +84,7 @@ class DataCollatorForNI:
                     add_task_definition = self.add_task_definition
                     num_pos_examples = self.num_pos_examples
                     num_neg_examples = self.num_neg_examples
-                    add_explanation = self.add_explanation 
+                    add_explanation = self.add_explanation
 
                 task_input = ""
                 # add the input first.
@@ -77,7 +94,7 @@ class DataCollatorForNI:
                     task_input += "."
                 task_input += "\n"
                 task_input += "Output: "
-                
+
                 task_name = ""
                 if add_task_name:
                     task_name += instance["Task"] + ". "
@@ -85,13 +102,16 @@ class DataCollatorForNI:
                 definition = ""
                 if add_task_definition:
                     if isinstance(instance["Definition"], list):
-                        definition = "Definition: " + instance["Definition"][0].strip() # TODO: should we use <Definition>?
+                        # TODO: should we use <Definition>?
+                        definition = "Definition: " + \
+                            instance["Definition"][0].strip()
                     else:
-                        definition = "Definition: " + instance["Definition"].strip()
+                        definition = "Definition: " + \
+                            instance["Definition"].strip()
                     if not definition[-1] in string.punctuation:
                         definition += "."
                     definition += "\n\n"
-                
+
                 # try to add positive examples.
                 pos_examples = []
                 for idx, pos_example in enumerate(instance["Positive Examples"][:num_pos_examples]):
@@ -103,7 +123,7 @@ class DataCollatorForNI:
                     pos_example_str += f" Output: {pos_example['output'].strip()}"
                     if not pos_example_str[-1] in string.punctuation:
                         pos_example_str += "."
-                    pos_example_str += "\n" 
+                    pos_example_str += "\n"
                     if add_explanation and "explanation" in pos_example:
                         pos_example_str += f" Explanation: {pos_example['explanation'].strip()}"
                         if not pos_example_str[-1] in string.punctuation:
@@ -116,11 +136,11 @@ class DataCollatorForNI:
                         # d = self.max_source_length - len(self.tokenizer(definition + " ".join(pos_examples) + task_input)["input_ids"])
                         # tokenized_pos_example_str = self.tokenizer(pos_example_str)["input_ids"]
                         # pos_examples.append(
-                        #     self.tokenizer.decode(tokenized_pos_example_str[:d // 2], skip_special_tokens=True) + 
+                        #     self.tokenizer.decode(tokenized_pos_example_str[:d // 2], skip_special_tokens=True) +
                         #     self.tokenizer.decode(tokenized_pos_example_str[-d // 2:], skip_special_tokens=True)
                         #     )
                         break
-                
+
                 # try to add negative examples.
                 neg_examples = []
                 for idx, neg_example in enumerate(instance["Negative Examples"][:num_neg_examples]):
@@ -142,55 +162,73 @@ class DataCollatorForNI:
                     if len(self.tokenizer(definition + " ".join(pos_examples) + " ".join(neg_examples) + neg_example_str + task_input)["input_ids"]) <= self.max_source_length:
                         neg_examples.append(neg_example_str)
                     else:
-                        break 
+                        break
 
-                source = task_name + definition + "".join(pos_examples) + "".join(neg_examples) + task_input
+                source = task_name + definition + \
+                    "".join(pos_examples) + "".join(neg_examples) + task_input
                 tokenized_source = self.tokenizer(source)["input_ids"]
                 if len(tokenized_source) <= self.max_source_length:
                     sources.append(source)
                 else:
-                    sources.append(self.tokenizer.decode(tokenized_source[:self.max_source_length], skip_special_tokens=True))
+                    sources.append(self.tokenizer.decode(
+                        tokenized_source[:self.max_source_length], skip_special_tokens=True))
 
                 if self.student_input:
                     # s_source
-                    s_source = task_name + definition + "".join(pos_examples[:self.args.s_num_pos_examples]) + task_input
+                    s_source = task_name + definition + \
+                        "".join(
+                            pos_examples[:self.args.s_num_pos_examples]) + task_input
                     tokenized_s_source = self.tokenizer(s_source)["input_ids"]
                     if len(tokenized_s_source) <= self.max_source_length:
                         s_sources.append(s_source)
                     else:
-                        s_sources.append(self.tokenizer.decode(tokenized_s_source[:self.max_source_length], skip_special_tokens=True))
-                
+                        s_sources.append(self.tokenizer.decode(
+                            tokenized_s_source[:self.max_source_length], skip_special_tokens=True))
+
                 if self.kd:
                     # prefix
-                    prefix = task_name + definition + "".join(pos_examples[:self.args.s_num_pos_examples]) + "".join(neg_examples)
+                    prefix = task_name + definition + \
+                        "".join(
+                            pos_examples[:self.args.s_num_pos_examples]) + "".join(neg_examples)
                     prefixs.append(prefix)
-                    
+
                 if self.args.custom_model:
                     # instance
                     instances.append(definition + task_input)
-                
+                    
+                if self.args.loramse and instance['Categories'][0] in data_map.values():
+                    if 'ko' in self.args.name:
+                        lora_A_params.append(lora_dict[instance['Categories'][0]]['param_tensor_A'])
+                        lora_B_params.append(lora_dict[instance['Categories'][0]]['param_tensor_B'])
+                    else:
+                        lora_A_params.append(lora_dict[instance['Categories'][0]]['param_tensor_qv_A'])
+                        lora_B_params.append(lora_dict[instance['Categories'][0]]['param_tensor_qv_B'])
+
         else:
-            sources, features, instances, s_sources, instruction_inputs, attention_masks = [], [], [], [], [], []
+            sources, features, instances, s_sources, instruction_inputs, attention_masks = [
+            ], [], [], [], [], []
             for instance in batch:
-                sources.append(instance["source"])     
+                sources.append(instance["source"])
                 features.append(self.task_features[instance['Task']])
                 if self.student_input:
                     s_sources.append(instance["s_source"])
                 if self.args.custom_model:
                     instances.append(instance["instance"])
-                    instruction_inputs.append(self.instruction_inputs[instance['Task']])
-                    attention_masks.append(self.attention_masks[instance['Task']])
+                    instruction_inputs.append(
+                        self.instruction_inputs[instance['Task']])
+                    attention_masks.append(
+                        self.attention_masks[instance['Task']])
         if self.text_only:
             t_model_inputs = {"inputs": sources}
         else:
             t_model_inputs = self.tokenizer(
-                sources, 
-                max_length=self.max_source_length, 
+                sources,
+                max_length=self.max_source_length,
                 padding=self.padding,
-                return_tensors=self.return_tensors, 
+                return_tensors=self.return_tensors,
                 truncation=True,
                 pad_to_multiple_of=self.pad_to_multiple_of)
-        
+
         if "output" in batch[0]["Instance"] and batch[0]["Instance"]["output"]:
             # Randomly select one reference if multiple are provided.
             labels = [random.choice(ex["Instance"]["output"]) for ex in batch]
@@ -207,13 +245,15 @@ class DataCollatorForNI:
                         pad_to_multiple_of=self.pad_to_multiple_of
                     )
                 label_mask = labels["attention_mask"].bool()
-                t_model_inputs["labels"] = labels["input_ids"].masked_fill(~label_mask, self.label_pad_token_id)
+                t_model_inputs["labels"] = labels["input_ids"].masked_fill(
+                    ~label_mask, self.label_pad_token_id)
         else:
             t_model_inputs["labels"] = None
 
         # prepare decoder_input_ids
         if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels") and not self.text_only:
-            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=t_model_inputs["labels"])
+            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(
+                labels=t_model_inputs["labels"])
             t_model_inputs["decoder_input_ids"] = decoder_input_ids
         if not self.kd:
             return t_model_inputs
@@ -232,22 +272,27 @@ class DataCollatorForNI:
                         features = prefixs_inputs
                     else:
                         prefixs_inputs = prefixs_inputs.to(self.model.device)
-                        hidden_states = self.model.encoder(**prefixs_inputs, return_dict=True, output_hidden_states=True).hidden_states
-                        
+                        hidden_states = self.model.encoder(
+                            **prefixs_inputs, return_dict=True, output_hidden_states=True).hidden_states
+
                         if self.args.pooling == 'first_last_avg':
-                            pooled_sentence = (hidden_states[-1] + hidden_states[1])
+                            pooled_sentence = (
+                                hidden_states[-1] + hidden_states[1])
                         elif self.args.pooling == 'last_avg':
                             pooled_sentence = (hidden_states[-1])
                         elif self.args.pooling == 'last2avg':
-                            pooled_sentence = (hidden_states[-1] + hidden_states[-2])
+                            pooled_sentence = (
+                                hidden_states[-1] + hidden_states[-2])
                         else:
-                            raise Exception("unknown pooling {}".format(self.args.pooling))
-                        
+                            raise Exception(
+                                "unknown pooling {}".format(self.args.pooling))
+
                         if self.args.custom_model or self.args.prefix_length > 0:
                             instruction_inputs = hidden_states[-1].cpu()
-                            attention_masks = prefixs_inputs['attention_mask'].cpu()
+                            attention_masks = prefixs_inputs['attention_mask'].cpu(
+                            )
                         features = pooled_sentence.mean(dim=1).cpu()
-            
+
             if self.args.custom_model:
                 if self.text_only:
                     model_inputs = {"inputs": instances}
@@ -276,7 +321,7 @@ class DataCollatorForNI:
                         truncation=True,
                         pad_to_multiple_of=self.pad_to_multiple_of
                     )
-                model_inputs["labels"] = t_model_inputs["labels"] 
+                model_inputs["labels"] = t_model_inputs["labels"]
                 if "decoder_input_ids" in t_model_inputs.keys():
                     model_inputs["decoder_input_ids"] = decoder_input_ids
             else:
@@ -286,9 +331,15 @@ class DataCollatorForNI:
             else:
                 model_inputs["features"] = torch.Tensor(features)
                 if self.args.prefix_length > 0 or self.args.custom_model:
-                    model_inputs["instruction_input"] = torch.Tensor(instruction_inputs)
-                    model_inputs["instruction_attention_mask"] = torch.Tensor(attention_masks)
+                    model_inputs["instruction_input"] = torch.Tensor(
+                        instruction_inputs)
+                    model_inputs["instruction_attention_mask"] = torch.Tensor(
+                        attention_masks)
                 if "gpt" in self.args.name:
-                    model_inputs["instruction_input"] = prefixs_inputs.to('cpu')
-
+                    model_inputs["instruction_input"] = prefixs_inputs.to(
+                        'cpu')
+            if self.args.loramse and len(lora_A_params) > 0:
+                model_inputs["lora_A"] = torch.Tensor(lora_A_params)
+                model_inputs["lora_B"] = torch.Tensor(lora_B_params)
+                
             return t_model_inputs, model_inputs

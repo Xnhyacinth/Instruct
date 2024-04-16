@@ -148,6 +148,12 @@ class ModelArguments:
             "help": "Whether to do_sample."
         },
     )
+    loramse: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use loramse."
+        },
+    )
     pooling: Optional[str] = field(
         default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
     )

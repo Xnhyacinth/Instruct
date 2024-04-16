@@ -132,7 +132,7 @@ class NaturalInstructions(datasets.GeneratorBasedBuilder):
         task_dir = self.config.task_dir
         if self.config.data_type is not None:
             self.config.data_type = [data_map[self.config.data_type]] if ',' not in self.config.data_type else [data_map[d] for d in self.config.data_type.split(',')]
-
+        
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,

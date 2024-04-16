@@ -229,6 +229,12 @@ class ModelArguments:
             "help": "Whether to do_sample."
         },
     )
+    loramse: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use loramse."
+        },
+    )
     pooling: Optional[str] = field(
         default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
     )
@@ -358,6 +364,9 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."}
     )
+    data_type: Optional[str] = field(
+        default=None, metadata={"help": "The task type of model."}
+    )
 
     def __post_init__(self):
         pass
@@ -455,7 +464,8 @@ def main():
         task_dir=data_args.task_dir,
         cache_dir=model_args.cache_dir,
         max_num_instances_per_task=data_args.max_num_instances_per_task,
-        max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
+        max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task,
+        data_type=data_args.data_type
     )
 
     # Load pretrained model and tokenizer

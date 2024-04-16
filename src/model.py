@@ -532,15 +532,16 @@ class HyperLora(nn.Module):
 
         val = val.to(torch.bfloat16)
         # Compute hypernet weights
-        weight1 = self.hypernet1(val)
-        weight2 = self.hypernet2(val)
+        self.lora_A = self.hypernet1(val)
+        self.lora_B = self.hypernet2(val)
+        
         # weight1 = weight1.repeat(
         #     1, x.shape[0] // weight1.shape[0], 1).view(-1, weight1.shape[1], weight1.shape[2])
         # weight2 = weight2.repeat(
         #     1, x.shape[0] // weight2.shape[0], 1).view(-1, weight2.shape[1], weight2.shape[2])
         # Apply lora
         out = self.dropout(self.linear(x))
-        out = torch.matmul(torch.matmul(x, weight1), weight2) + out
+        out = torch.matmul(torch.matmul(x, self.lora_A), self.lora_B) + out
         if self.prefix:
             # **self.hypernet1.inputs if self.gpt else self.hypernet1.prefixs
             prefix = self.prefix_gen(self.hypernet1.prefixs)
