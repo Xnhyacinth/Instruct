@@ -9,13 +9,13 @@
 # nohup bash scripts/train_tk_instruct.sh 2 6,7 t5-base 8 1e-4 0 kd 15000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 'QA,QG,SA,TLD,PE,Misc.' > logs/t5-base-1e-4_lora_warm0.05_pos2_QA_allenai.log 2>&1 &
 
 # sleep 21000
-nohup bash scripts/train_tk_instruct.sh 2 4,5 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt TC > logs/t5-base-1e-4_lora_warm0.05_pos2_TC.log 2>&1 &
-sleep 20
-nohup bash scripts/train_tk_instruct.sh 2 0,1 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt CC > logs/t5-base-1e-4_lora_warm0.05_pos2_CC_allenai.log 2>&1 &
-sleep 20
-nohup bash scripts/train_tk_instruct.sh 2 2,3 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt IE > logs/t5-base-1e-4_lora_warm0.05_pos2_IE_allenai.log 2>&1 &
-sleep 20
-nohup bash scripts/train_tk_instruct.sh 2 6,7 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt NER > logs/t5-base-1e-4_lora_warm0.05_pos2_NER.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 2 4,5 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt TM > logs/t5-base-1e-4_lora_warm0.05_pos2_TM.log 2>&1 &
+# sleep 20
+# nohup bash scripts/train_tk_instruct.sh 2 0,1 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt WCG > logs/t5-base-1e-4_lora_warm0.05_pos2_WCG_allenai.log 2>&1 &
+# sleep 20
+nohup bash scripts/train_tk_instruct.sh 2 2,3 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt TCo > logs/t5-base-1e-4_lora_warm0.05_pos2_TCo_allenai.log 2>&1 &
+# sleep 20
+# nohup bash scripts/train_tk_instruct.sh 2 6,7 t5-base 8 1e-4 0 lora 3 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt QU > logs/t5-base-1e-4_lora_warm0.05_pos2_QU.log 2>&1 &
 
 # echo '1111111'
 # sleep 21500

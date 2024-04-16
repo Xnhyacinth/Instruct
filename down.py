@@ -14,11 +14,11 @@ from torch import tensor
 # data = load_dataset("Xnhyacinth/Image", 'WQ', download_config=config)
 # print(data)
 # data.save_to_disk('dataset/Image/WQ')
-model_name = 'qinyuany/my-t0-base'
-# model_name = 'google/t5-xl-lm-adapt'
+# model_name = 'qinyuany/my-t0-base'
+# # model_name = 'google/t5-xl-lm-adapt'
+# # tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
+# # model = transformers.AutoModelForCausalLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
 # tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
-# model = transformers.AutoModelForCausalLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
-tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
 # sequence = "who are you?"
 # print("Original sequence: ",sequence)
 # tokenized_sequence = tokenizer.tokenize(sequence)
@@ -30,7 +30,7 @@ tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_o
 # decoded_encodings=tokenizer.decode([784, 25946, 6, 3, 4271, 6, 10635, 6, 6862, 6, 14105, 3, 3840, 908, 1])
 # print("Decoded sequence: ", decoded_encodings)
 
-model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
+# model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
 
 # print(model.encoder(**encodings))
 # from huggingface_hub import snapshot_download
@@ -46,12 +46,21 @@ model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_do
 
 
 
-# import os
-# import json
-# from collections import defaultdict
-# path = 'data/splits/default/train_tasks.txt'
-# task_dir = 'data/tasks'
-# data_dict = defaultdict(int)
+import os
+import json
+from collections import defaultdict
+path = 'data/splits/default/train_tasks.txt'
+task_dir = 'data/tasks'
+data_dict = defaultdict(int)
+with open(path, encoding="utf-8") as split_f:
+    for line in split_f:
+        task_name = line.strip()
+        task_path = os.path.join(task_dir, task_name + ".json")
+        with open(task_path, encoding="utf-8") as task_f:
+            s = task_f.read()
+            task_data = json.loads(s)
+            data_dict[task_data['Categories'][0]] += 1
+# path = 'data/splits/default/test_tasks.txt'
 # with open(path, encoding="utf-8") as split_f:
 #     for line in split_f:
 #         task_name = line.strip()
@@ -59,27 +68,18 @@ model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_do
 #         with open(task_path, encoding="utf-8") as task_f:
 #             s = task_f.read()
 #             task_data = json.loads(s)
-#             data_dict[task_data['Categories'][0]] += 1
-# # path = 'data/splits/default/test_tasks.txt'
-# # with open(path, encoding="utf-8") as split_f:
-# #     for line in split_f:
-# #         task_name = line.strip()
-# #         task_path = os.path.join(task_dir, task_name + ".json")
-# #         with open(task_path, encoding="utf-8") as task_f:
-# #             s = task_f.read()
-# #             task_data = json.loads(s)
-# #             data_dict.append(task_data['Categories'])
-# # data_dict = list(set(data_dict))
+#             data_dict.append(task_data['Categories'])
+# data_dict = list(set(data_dict))
 
-# ds = {}
-# for d in data_dict.keys():
-#     dd = d.split(' ')
-#     ddd = ''
-#     for x in dd:
-#         ddd += x[0]
-#     if len(dd) > 1:
-#         ds[ddd] = d
-#     else:
-#         ds[d] = d
-# with open('src/data_dict.json', 'w') as f:
-#     json.dump({"data_map": ds, "data_num": data_dict}, f, indent=4)
+ds = {}
+for d in data_dict.keys():
+    dd = d.split(' ')
+    ddd = ''
+    for x in dd:
+        ddd += x[0]
+    if len(dd) > 1:
+        ds[ddd] = d
+    else:
+        ds[d] = d
+with open('src/data_dict.json', 'w') as f:
+    json.dump({"data_map": ds, "data_num": dict(sorted(data_dict.items(), key = lambda kv:(kv[1], kv[0]), reverse=True))}, f, indent=4)
