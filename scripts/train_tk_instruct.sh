@@ -115,8 +115,9 @@ if [ "$tune" == "lora" ];then
         # sed 's/[ ][ ]*/_/g' <<< $data_type
         name="${name}_$data_type"
         output_dir="output_meta/$data_type/${output_dir}"
+        
         extra_args="${extra_args} --data_type $data_type"
-        max_num_instances=10000
+        max_num_instances=10000 # 10000
     fi
 fi
 
@@ -231,9 +232,15 @@ if [ "$tune" == "kd" ];then
         # sed 's/[ ][ ]*/_/g' <<< $data_type
         name="${name}_$data_type"
         output_dir="${output_dir}_$data_type"
+        max_num_instances=10000
+        if [ "$data_type" == "QAx" ];then
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,TtC,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC"
+            max_num_instances=700
+        fi
         extra_args="${extra_args} --data_type $data_type"
-        max_num_instances=1200
+        
     fi
+    
 fi
 if [ "$do_sample" == "sample" ];then
     name="${name}_sample"

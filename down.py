@@ -45,22 +45,50 @@ from torch import tensor
 # print(a.config.d_model)
 
 
-
-import os
 import json
-from collections import defaultdict
-path = 'data/splits/default/train_tasks.txt'
-task_dir = 'data/tasks'
-data_dict = defaultdict(int)
-with open(path, encoding="utf-8") as split_f:
-    for line in split_f:
-        task_name = line.strip()
-        task_path = os.path.join(task_dir, task_name + ".json")
-        with open(task_path, encoding="utf-8") as task_f:
-            s = task_f.read()
-            task_data = json.loads(s)
-            data_dict[task_data['Categories'][0]] += 1
-# path = 'data/splits/default/test_tasks.txt'
+with open('src/data_dict.json', 'r') as f:
+    data_dict = json.load(f)
+    data_map = data_dict['data_map']
+print(','.join(list(data_map.keys())))
+# import os
+# import shutil
+
+# def move_file_to_parent_folder(directory, filename):
+#     # 获取指定目录下的所有文件夹
+#     folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+    
+#     # 移动文件到上一级目录
+#     for folder in folders:
+#         try:
+#             for xx in os.listdir(f'{directory}/{folder}'):
+#                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
+#                     src_file = os.path.join(directory, folder, filename)
+#                     dst_file = os.path.join(directory, folder, xx, filename)
+#             if os.path.exists(src_file):
+#                 shutil.move(src_file, dst_file)
+#                 print(f"Moved {src_file} to {dst_file}")
+#         except:
+#             pass
+
+# # 指定目录和要移动的文件名
+# directory = "output_meta"
+# filename = "param_tensors.json"
+
+# # 调用函数移动文件
+# move_file_to_parent_folder(directory, filename)
+
+
+
+
+
+
+
+# import os
+# import json
+# from collections import defaultdict
+# path = 'data/splits/default/train_tasks.txt'
+# task_dir = 'data/tasks'
+# data_dict = defaultdict(int)
 # with open(path, encoding="utf-8") as split_f:
 #     for line in split_f:
 #         task_name = line.strip()
@@ -68,18 +96,27 @@ with open(path, encoding="utf-8") as split_f:
 #         with open(task_path, encoding="utf-8") as task_f:
 #             s = task_f.read()
 #             task_data = json.loads(s)
-#             data_dict.append(task_data['Categories'])
-# data_dict = list(set(data_dict))
+#             data_dict[task_data['Categories'][0]] += 1
+# # path = 'data/splits/default/test_tasks.txt'
+# # with open(path, encoding="utf-8") as split_f:
+# #     for line in split_f:
+# #         task_name = line.strip()
+# #         task_path = os.path.join(task_dir, task_name + ".json")
+# #         with open(task_path, encoding="utf-8") as task_f:
+# #             s = task_f.read()
+# #             task_data = json.loads(s)
+# #             data_dict.append(task_data['Categories'])
+# # data_dict = list(set(data_dict))
 
-ds = {}
-for d in data_dict.keys():
-    dd = d.split(' ')
-    ddd = ''
-    for x in dd:
-        ddd += x[0]
-    if len(dd) > 1:
-        ds[ddd] = d
-    else:
-        ds[d] = d
-with open('src/data_dict.json', 'w') as f:
-    json.dump({"data_map": ds, "data_num": dict(sorted(data_dict.items(), key = lambda kv:(kv[1], kv[0]), reverse=True))}, f, indent=4)
+# ds = {}
+# for d in data_dict.keys():
+#     dd = d.split(' ')
+#     ddd = ''
+#     for x in dd:
+#         ddd += x[0]
+#     if len(dd) > 1:
+#         ds[ddd] = d
+#     else:
+#         ds[d] = d
+# with open('src/data_dict.json', 'w') as f:
+#     json.dump({"data_map": ds, "data_num": dict(sorted(data_dict.items(), key = lambda kv:(kv[1], kv[0]), reverse=True))}, f, indent=4)
