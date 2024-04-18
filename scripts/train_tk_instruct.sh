@@ -233,9 +233,13 @@ if [ "$tune" == "kd" ];then
         name="${name}_$data_type"
         output_dir="${output_dir}_$data_type"
         max_num_instances=10000
+        if [ "$data_type" == "QAa" ];then
+            data_type="QA,QG,SA,TLD,PE,Misc.,TC"
+            max_num_instances=1200 
+        fi
         if [ "$data_type" == "QAx" ];then
-            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC" # TtC,
-            max_num_instances=700
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC,TtC"
+            max_num_instances=800 #700
         fi
         extra_args="${extra_args} --data_type $data_type"
         
