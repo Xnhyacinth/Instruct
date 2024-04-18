@@ -45,37 +45,37 @@ from torch import tensor
 # print(a.config.d_model)
 
 
-import json
-with open('src/data_dict.json', 'r') as f:
-    data_dict = json.load(f)
-    data_map = data_dict['data_map']
-print(','.join(list(data_map.keys())))
-# import os
-# import shutil
+# import json
+# with open('src/data_dict.json', 'r') as f:
+#     data_dict = json.load(f)
+#     data_map = data_dict['data_map']
+# print(','.join(list(data_map.keys())))
+import os
+import shutil
 
-# def move_file_to_parent_folder(directory, filename):
-#     # 获取指定目录下的所有文件夹
-#     folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
-    
-#     # 移动文件到上一级目录
-#     for folder in folders:
-#         try:
-#             for xx in os.listdir(f'{directory}/{folder}'):
-#                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
-#                     src_file = os.path.join(directory, folder, filename)
-#                     dst_file = os.path.join(directory, folder, xx, filename)
-#             if os.path.exists(src_file):
-#                 shutil.move(src_file, dst_file)
-#                 print(f"Moved {src_file} to {dst_file}")
-#         except:
-#             pass
+def move_file_to_parent_folder(directory, filename):
+    # 获取指定目录下的所有文件夹
+    folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+    print(len(folders))
+    # 移动文件到上一级目录
+    for folder in folders:
+        try:
+            for xx in os.listdir(f'{directory}/{folder}'):
+                for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
+                    src_file = os.path.join(directory, folder, xx, xxx, filename)
+                    dst_file = os.path.join(directory, folder, xx, filename)
+            if os.path.exists(src_file):
+                shutil.move(src_file, dst_file)
+                print(f"Moved {src_file} to {dst_file}")
+        except:
+            pass
 
-# # 指定目录和要移动的文件名
-# directory = "output_meta"
-# filename = "param_tensors.json"
+# 指定目录和要移动的文件名
+directory = "output_meta"
+filename = "param_tensors.json"
 
-# # 调用函数移动文件
-# move_file_to_parent_folder(directory, filename)
+# 调用函数移动文件
+move_file_to_parent_folder(directory, filename)
 
 
 

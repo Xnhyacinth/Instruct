@@ -80,6 +80,19 @@ if [ "$tune" != "full" ];then
         run_file=run_s2s_kd_ac.py
     fi
 fi
+if [ "$tune" == "full" ];then
+    if [ "$data_type" != "0" ];then
+        # sed 's/[ ][ ]*/_/g' <<< $data_type
+        run_file=run_s2s_kd.py
+        name="${name}_$data_type"
+        output_dir="output/$data_type/${output_dir}"
+        if [ "$data_type" == "QAa" ];then
+            data_type="QA,QG,SA,TLD,PE,Misc." #,TC
+            max_num_instances=1200 
+        fi
+        extra_args="${extra_args} --data_type $data_type"
+    fi
+fi
 model=google/${m}-lm-adapt
 if [ "$tune" == "lora" ];then
     if [ "$allenai" == "allenai" ];then
@@ -117,7 +130,7 @@ if [ "$tune" == "lora" ];then
         output_dir="output_meta/$data_type/${output_dir}"
         
         extra_args="${extra_args} --data_type $data_type"
-        max_num_instances=10000 # 10000
+        max_num_instances=10000 # 10000 2000, 3000
     fi
 fi
 
@@ -238,7 +251,11 @@ if [ "$tune" == "kd" ];then
             max_num_instances=1200 
         fi
         if [ "$data_type" == "QAx" ];then
-            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC,TtC"
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC,TtC,TS"
+            max_num_instances=800 #700
+        fi
+        if [ "$data_type" == "QAxx" ];then
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC,TtC,TS,StC,Explanation"
             max_num_instances=800 #700
         fi
         extra_args="${extra_args} --data_type $data_type"

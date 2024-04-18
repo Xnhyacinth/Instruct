@@ -57,7 +57,8 @@
         "TCo": "Text Completion",
         "SCo": "Sentence Composition",
         "StC": "Story Composition",
-        "CCl": "Commonsense Classification"
+        "CCl": "Commonsense Classification",
+        "SCl": "Spam Classification"
     },
     "data_num": {
         "Question Answering": 157,

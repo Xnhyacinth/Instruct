@@ -479,12 +479,12 @@ def main():
         model_cls = T5ForConditionalGeneration
         config_cls = T5Config
     else:
-        # model_cls = AutoModelForSeq2SeqLM
-        # config_cls = AutoConfig
-        from modeling_t5 import T5ForConditionalGeneration
-        from configuration_t5 import T5Config
-        model_cls = T5ForConditionalGeneration
-        config_cls = T5Config
+        model_cls = AutoModelForSeq2SeqLM
+        config_cls = AutoConfig
+        # from modeling_t5 import T5ForConditionalGeneration
+        # from configuration_t5 import T5Config
+        # model_cls = T5ForConditionalGeneration
+        # config_cls = T5Config
     config = config_cls.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         # cache_dir=model_args.cache_dir,
@@ -559,6 +559,8 @@ def main():
             trainable_params, all_param = get_parameter_number(model)
             logger.info(
                 f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
+    else:
+        model = model_cls
     if "t5-xxl" not in model_args.model_name_or_path:
         model.resize_token_embeddings(len(tokenizer))
 
@@ -837,27 +839,45 @@ def main():
 
     # Data collator
     model_args.s_num_pos_examples = data_args.s_num_pos_examples
-    data_collator = DataCollatorForNI(
-        tokenizer,
-        model=t_model,
-        padding="max_length" if data_args.pad_to_max_length else "longest",
-        max_source_length=data_args.max_source_length,
-        max_target_length=data_args.max_target_length,
-        label_pad_token_id=label_pad_token_id,
-        pad_to_multiple_of=8 if training_args.fp16 else None,
-        add_task_name=data_args.add_task_name,
-        add_task_definition=data_args.add_task_definition,
-        num_pos_examples=data_args.num_pos_examples,
-        num_neg_examples=data_args.num_neg_examples,
-        add_explanation=data_args.add_explanation,
-        tk_instruct=data_args.tk_instruct,
-        kd=model_args.kd,
-        task_features=task_features if model_args.whitening else None,
-        instruction_inputs=instruction_inputs if model_args.whitening else None,
-        attention_masks=attention_masks if model_args.whitening else None,
-        args=model_args,
-        student_input=data_args.s_num_pos_examples != data_args.num_pos_examples if training_args.do_train else False,
-    )
+    if model_args.kd:
+        data_collator = DataCollatorForNI(
+            tokenizer,
+            model=t_model,
+            padding="max_length" if data_args.pad_to_max_length else "longest",
+            max_source_length=data_args.max_source_length,
+            max_target_length=data_args.max_target_length,
+            label_pad_token_id=label_pad_token_id,
+            pad_to_multiple_of=8 if training_args.fp16 else None,
+            add_task_name=data_args.add_task_name,
+            add_task_definition=data_args.add_task_definition,
+            num_pos_examples=data_args.num_pos_examples,
+            num_neg_examples=data_args.num_neg_examples,
+            add_explanation=data_args.add_explanation,
+            tk_instruct=data_args.tk_instruct,
+            kd=model_args.kd,
+            task_features=task_features if model_args.whitening else None,
+            instruction_inputs=instruction_inputs if model_args.whitening else None,
+            attention_masks=attention_masks if model_args.whitening else None,
+            args=model_args,
+            student_input=data_args.s_num_pos_examples != data_args.num_pos_examples if training_args.do_train else False,
+        )
+    else:
+        data_collator = DataCollatorForNI(
+            tokenizer,
+            model=model,
+            padding="max_length" if data_args.pad_to_max_length else "longest",
+            max_source_length=data_args.max_source_length,
+            max_target_length=data_args.max_target_length,
+            label_pad_token_id=label_pad_token_id,
+            pad_to_multiple_of=8 if training_args.fp16 else None,
+            add_task_name=data_args.add_task_name,
+            add_task_definition=data_args.add_task_definition,
+            num_pos_examples=data_args.num_pos_examples,
+            num_neg_examples=data_args.num_neg_examples,
+            add_explanation=data_args.add_explanation,
+            tk_instruct=data_args.tk_instruct,
+            args=model_args
+        )
     # we don't want to remove unused columns because we will prepare each batch during training,
     # and some of the information will aslo be used in evaluation.
     training_args.remove_unused_columns = False
@@ -898,7 +918,21 @@ def main():
     # logger.info(f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
 
     # Initialize our Trainer
-    trainer = NIKDTrainer(
+    if model_args.kd:
+        trainer = NIKDTrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset if training_args.do_train else None,
+            eval_dataset=eval_dataset if training_args.do_eval else None,
+            tokenizer=tokenizer,
+            data_collator=data_collator,
+            compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
+            callbacks=[
+                DenserEvalCallback] if training_args.denser_evaluation else None
+        )
+        trainer.post_init(model_args, t_model)
+    else:
+        trainer = NITrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
@@ -906,10 +940,8 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
-        callbacks=[
-            DenserEvalCallback] if training_args.denser_evaluation else None
+        callbacks=[DenserEvalCallback] if training_args.denser_evaluation else None
     )
-    trainer.post_init(model_args, t_model)
     # trainer.post_init(model_args, t_model)
     all_metrics = {"run_name": training_args.run_name}
 
