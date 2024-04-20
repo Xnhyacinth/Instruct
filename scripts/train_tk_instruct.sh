@@ -128,7 +128,7 @@ if [ "$tune" == "lora" ];then
         # sed 's/[ ][ ]*/_/g' <<< $data_type
         name="${name}_$data_type"
         output_dir="output_meta/$data_type/${output_dir}"
-        
+        gradient_accumulation_steps=1
         extra_args="${extra_args} --data_type $data_type"
         max_num_instances=10000 # 10000 2000, 3000
     fi
@@ -155,7 +155,7 @@ if [ "$tune" == "kd" ];then
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-11b-def 
             fi
-            gradient_accumulation_steps=4
+            gradient_accumulation_steps=2
             max_num_instances=250
             if [ "$warmup_ratio" == "0.02" ];then
                 gradient_accumulation_steps=2

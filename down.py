@@ -69,12 +69,33 @@ def move_file_to_parent_folder(directory, filename):
                 print(f"Moved {src_file} to {dst_file}")
         except:
             pass
+import shutil
+
+def rm_file_to_parent_folder(directory, filename):
+    # 获取指定目录下的所有文件夹
+    folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+    print(len(folders))
+    # 移动文件到上一级目录
+    for folder in folders:
+        try:
+            for xx in os.listdir(f'{directory}/{folder}'):
+                for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
+                    for xxxx in os.listdir(f'{directory}/{folder}/{xx}/{xxx}'):
+                        if filename in xxxx:
+                            src_file = os.path.join(directory, folder, xx, xxx, xxxx)
+                            # os.remove(src_file)
+                            # os.removedirs(src_file)
+                            shutil.rmtree(src_file)
+                            print(f"Removed {src_file}")
+        except:
+            pass
 
 # 指定目录和要移动的文件名
 directory = "output_meta"
 filename = "param_tensors.json"
-
+# filename = "check"
 # 调用函数移动文件
+# rm_file_to_parent_folder(directory, filename)
 move_file_to_parent_folder(directory, filename)
 
 

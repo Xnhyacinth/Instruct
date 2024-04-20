@@ -58,7 +58,8 @@
         "SCo": "Sentence Composition",
         "StC": "Story Composition",
         "CCl": "Commonsense Classification",
-        "SCl": "Spam Classification"
+        "SCl": "Spam Classification",
+        "SDe": "Stance Detection"
     },
     "data_num": {
         "Question Answering": 157,
