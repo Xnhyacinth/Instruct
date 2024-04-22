@@ -128,7 +128,10 @@ if [ "$tune" == "lora" ];then
         # sed 's/[ ][ ]*/_/g' <<< $data_type
         name="${name}_$data_type"
         output_dir="output_meta/$data_type/${output_dir}"
-        gradient_accumulation_steps=1
+        if [ "$pos" == "0" ];then
+            output_dir="output_meta_pos0/$data_type/${output_dir}"
+        fi
+        gradient_accumulation_steps=2
         extra_args="${extra_args} --data_type $data_type"
         max_num_instances=10000 # 10000 2000, 3000
     fi

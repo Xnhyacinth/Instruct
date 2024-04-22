@@ -54,9 +54,11 @@ import os
 import shutil
 
 def move_file_to_parent_folder(directory, filename):
+    directory = "output_meta"
     # 获取指定目录下的所有文件夹
     folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
     print(len(folders))
+    l = 0
     # 移动文件到上一级目录
     for folder in folders:
         try:
@@ -67,11 +69,17 @@ def move_file_to_parent_folder(directory, filename):
             if os.path.exists(src_file):
                 shutil.move(src_file, dst_file)
                 print(f"Moved {src_file} to {dst_file}")
+            if os.path.exists(dst_file):
+                l += 1
         except:
             pass
+    print(l)
 import shutil
 
 def rm_file_to_parent_folder(directory, filename):
+    filename0 = "check"
+    filename1 = "pytorch"
+    filename2 = "spiece"
     # 获取指定目录下的所有文件夹
     folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
     print(len(folders))
@@ -81,9 +89,17 @@ def rm_file_to_parent_folder(directory, filename):
             for xx in os.listdir(f'{directory}/{folder}'):
                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
                     for xxxx in os.listdir(f'{directory}/{folder}/{xx}/{xxx}'):
-                        if filename in xxxx:
+                        if filename1 in xxxx:
                             src_file = os.path.join(directory, folder, xx, xxx, xxxx)
-                            # os.remove(src_file)
+                            print(f"Removed {src_file}")
+                            os.remove(src_file)
+                            # os.removedirs(src_file)
+                        if filename2 in xxxx:
+                            src_file = os.path.join(directory, folder, xx, xxx, xxxx)
+                            print(f"Removed {src_file}")
+                            os.remove(src_file)
+                        if filename0 in xxxx:
+                            src_file = os.path.join(directory, folder, xx, xxx, xxxx)
                             # os.removedirs(src_file)
                             shutil.rmtree(src_file)
                             print(f"Removed {src_file}")
@@ -95,7 +111,7 @@ directory = "output_meta"
 filename = "param_tensors.json"
 # filename = "check"
 # 调用函数移动文件
-# rm_file_to_parent_folder(directory, filename)
+rm_file_to_parent_folder(directory, filename)
 move_file_to_parent_folder(directory, filename)
 
 

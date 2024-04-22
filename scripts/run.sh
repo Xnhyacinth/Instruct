@@ -6,9 +6,9 @@
 # 'QA,QG,SA,TLD,PE,Misc.'
 # nohup bash scripts/train_tk_instruct.sh 2 4,5 t5-base 8 1e-4 0 kd 15000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 'QAx1' loramse > logs/t5-base-1e-4_lora_warm0.05_pos2_QAx1_loramse.log 2>&1 &
 # sleep 20
-# nohup bash scripts/train_tk_instruct.sh 2 0,1 t5-base 8 1e-4 0 kd 20000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 'QAxx' loramse > logs/t5-base-1e-4_lora_warm0.05_pos2_QAxx_loramse.log 2>&1 &
+nohup bash scripts/train_tk_instruct.sh 2 0,1 t5-base 8 1e-4 0 kd 20000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 0 loramse > logs/t5-base-1e-4_lora_warm0.05_pos2_all_loramse.log 2>&1 &
 # sleep 20
-# nohup bash scripts/train_tk_instruct.sh 2 2,3 t5-base 8 1e-4 0 kd 20000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 'QAxx' > logs/t5-base-1e-4_lora_warm0.05_pos2_QAxx_allenai.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 2 6,7 t5-base 8 1e-4 0 kd 20000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt QAa > logs/t5-base-1e-4_lora_warm0.05_pos2_QAa_allenai.log 2>&1 &
 # nohup bash scripts/train_tk_instruct.sh 2 6,7 t5-base 4 1e-4 0 full 15000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt QAa > logs/t5-base-1e-4_full_warm0.05_pos2_QAa.log 2>&1 &
 # nohup bash scripts/train_tk_instruct.sh 2 6,7 t5-base 4 1e-4 0 lora 5000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt SP > logs/t5-base-1e-4_lora_warm0.05_pos2_SP.log 2>&1 &
 # sleep 20
@@ -23,7 +23,7 @@
 # sleep 20
 # nohup bash scripts/train_tk_instruct.sh 1 0 t5-base 4 1e-4 0 lora 5000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt Mathematics > logs/t5-base-1e-4_lora_warm0.05_pos2_Mathematics_allenai.log 2>&1 &
 # sleep 20
-# nohup bash scripts/train_tk_instruct.sh 1 2 t5-base 4 1e-4 0 lora 5000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt II > logs/t5-base-1e-4_lora_warm0.05_pos2_II_allenai.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 1 1 t5-base 1 1e-4 0 lora 2500 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt SRC > logs/t5-base-1e-4_lora_warm0.05_pos2_SRC_allenai.log 2>&1 &
 # sleep 20
 # nohup bash scripts/train_tk_instruct.sh 1 6 t5-base 4 1e-4 0 lora 5000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt DST > logs/t5-base-1e-4_lora_warm0.05_pos2_DST.log 2>&1 &
 # sleep 20
@@ -38,7 +38,7 @@
 # sleep 11200
 # nohup bash scripts/train_tk_instruct.sh 1 4 t5-base 1 1e-4 0 lora 5000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt SCl > logs/t5-base-1e-4_lora_warm0.05_pos2_SCl.log 2>&1 &
 # sleep 20
-nohup bash scripts/train_tk_instruct.sh 1 5 t5-base 1 1e-4 0 lora 5000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt SDe > logs/t5-base-1e-4_lora_warm0.05_pos2_SDe.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 1 5 t5-base 1 1e-4 0 lora 5000 0.01 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt SDe > logs/t5-base-1e-4_lora_warm0.05_pos2_SDe.log 2>&1 &
 
 # sleep 21500
 # nohup bash scripts/train_tk_instruct.sh 2 4,5 t5-base 8 1e-4 0 lora 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt TLD > logs/t5-base-1e-4_lora_warm0.05_pos2_TLD.log 2>&1 &
