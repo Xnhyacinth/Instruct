@@ -41,8 +41,9 @@ prefix=${21:-"0"}
 gpt=${22:-"0"}
 data_type=${23:-"0"}
 loramse=${24:-"0"}
-dataset=${25:-"0"}
-do_sample=${26:-"0"}
+stand=${25:-"0"}
+dataset=${26:-"0"}
+do_sample=${27:-"0"}
 cache="./cache"
 echo epoch: ${epoch}
 name=experiment_pos${pos}_pooler-${m}_lr${lr}_warm${warmup_ratio}_${epoch}
@@ -114,7 +115,7 @@ if [ "$tune" == "lora" ];then
             if [ "$pos" == "0" ];then
                 model=allenai/tk-instruct-11b-def 
             fi
-            gradient_accumulation_steps=4
+            gradient_accumulation_steps=2
             max_num_instances=300
             if [ "$warmup_ratio" == "0.02" ];then
                 gradient_accumulation_steps=2
@@ -238,6 +239,11 @@ if [ "$tune" == "kd" ];then
         name="${name}_hyper"
         output_dir="${output_dir}_hyper"
         extra_args="${extra_args} --hyperencoder True"
+    fi
+    if [ "$stand" == "stand" ];then
+        name="${name}_stand"
+        output_dir="${output_dir}_stand"
+        extra_args="${extra_args} --logit_stand True"
     fi
     if [ "$loramse" == "loramse" ];then
         name="${name}_loramse"

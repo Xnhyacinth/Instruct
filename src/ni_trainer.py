@@ -123,6 +123,20 @@ class NIKDTrainer(Seq2SeqTrainer):
         )
         return torch.sigmoid(kl_loss) * kl_loss / 2
     
+    def normalize(self, logit):
+        mean = logit.mean(dim=-1, keepdims=True)
+        stdv = logit.std(dim=-1, keepdims=True)
+        return (logit - mean) / (1e-7 + stdv)
+
+    def kd_loss(self, logits_student_in, logits_teacher_in, temperature, logit_stand):
+        logits_student = self.normalize(logits_student_in) if logit_stand else logits_student_in
+        logits_teacher = self.normalize(logits_teacher_in) if logit_stand else logits_student_in
+        log_pred_student = F.log_softmax(logits_student / temperature, dim=-1)
+        pred_teacher = F.softmax(logits_teacher / temperature, dim=-1)
+        loss_kd = F.kl_div(log_pred_student, pred_teacher, reduction="none").sum(-1).mean()
+        loss_kd *= temperature**2
+        return loss_kd
+    
     def cal_hd(self, hd, t_hd, context_mask=None):
         if self.config.select:
             hd = [hd[0], hd[len(hd) // 2], hd[-1]]
@@ -209,8 +223,7 @@ class NIKDTrainer(Seq2SeqTrainer):
         param_tensor_A = torch.cat(param_tensor_A, dim=1)
         param_tensor_B = torch.cat(param_tensor_B, dim=1)
 
-        return (F.mse_loss(param_tensor_A, lora_B) + F.mse_loss(param_tensor_B, lora_A)) * 1000
-        
+        return (F.mse_loss(param_tensor_A, lora_B) + F.mse_loss(param_tensor_B, lora_A)) * 1000   
     
     def compute_loss(self, model, inputs, return_outputs=False):
         # forward pass
@@ -243,7 +256,9 @@ class NIKDTrainer(Seq2SeqTrainer):
                     + (1 - self.config.alpha_kd) * loss
                 )
         if self.config.use_kl:
-            loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
+        #     loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
+        # if self.config.logit_stand:
+            loss += self.kd_loss(logits, t_logits, self.config.temperature, self.config.logit_stand) * 5
         if self.config.use_hd:
             loss += self.cal_hd(outputs.get("encoder_hidden_states"), t_outputs.get("encoder_hidden_states"))
             loss += self.cal_hd(outputs.get("decoder_hidden_states"), t_outputs.get("decoder_hidden_states")) * 10
