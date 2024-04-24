@@ -850,9 +850,12 @@ def main():
             data_dict = json.load(f)
             data_map = data_dict['data_map']
         lora_dict = {}
-        for file in os.listdir('output_meta'):
+        output_lora_path = 'output_meta'
+        if data_args.num_pos_examples == 0:
+            output_lora_path = 'output_meta_pos0'
+        for file in os.listdir(output_lora_path):
             try:
-                with open(f'output_meta/{file}/param_tensors.json', 'r') as f:
+                with open(f'{output_lora_path}/{file}/param_tensors.json', 'r') as f:
                     lora_d = json.load(f)
                     if 'ko' not in model_args.name:
                         lora_d.pop('param_tensor_A')
