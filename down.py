@@ -68,7 +68,10 @@ def move_file_to_parent_folder(directory, filename):
                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
                     src_file = os.path.join(
                         directory, folder, xx, xxx, filename)
-                    dst_file = os.path.join(directory, folder, xx, filename)
+                    dst_file = os.path.join(directory, folder, filename)
+            # src_file = os.path.join(
+            #                     directory, folder, 'output_pos2_pooler', filename)
+            # dst_file = os.path.join(directory, folder, filename)
             if os.path.exists(src_file):
                 shutil.move(src_file, dst_file)
                 print(f"Moved {src_file} to {dst_file}")
