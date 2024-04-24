@@ -846,6 +846,23 @@ def main():
     # Data collator
     model_args.s_num_pos_examples = data_args.s_num_pos_examples
     if model_args.kd:
+        with open('src/data_dict.json', 'r') as f:
+            data_dict = json.load(f)
+            data_map = data_dict['data_map']
+        lora_dict = {}
+        for file in os.listdir('output_meta'):
+            try:
+                with open(f'output_meta/{file}/output_pos2_pooler/param_tensors.json', 'r') as f:
+                    lora_d = json.load(f)
+                    if 'ko' not in model_args.name:
+                        lora_d.pop('param_tensor_A')
+                        lora_d.pop('param_tensor_B')
+                    else:
+                        lora_d.pop('param_tensor_qv_A')
+                        lora_d.pop('param_tensor_qv_B')
+                    lora_dict[data_map[file]] = lora_d
+            except:
+                pass
         data_collator = DataCollatorForNI(
             tokenizer,
             model=t_model,
@@ -866,6 +883,8 @@ def main():
             attention_masks=attention_masks if model_args.whitening else None,
             args=model_args,
             student_input=data_args.s_num_pos_examples != data_args.num_pos_examples if training_args.do_train else False,
+            lora_dict=lora_dict,
+            data_map=data_map
         )
     else:
         data_collator = DataCollatorForNI(

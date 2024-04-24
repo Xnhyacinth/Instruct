@@ -8,17 +8,6 @@ import os
 
 logger = logging.getLogger(__name__)
 
-with open('src/data_dict.json', 'r') as f:
-    data_dict = json.load(f)
-    data_map = data_dict['data_map']
-lora_dict = {}
-for file in os.listdir('output_meta'):
-    try:
-        with open(f'output_meta/{file}/output_pos2_pooler/param_tensors.json', 'r') as f:
-            lora_dict[data_map[file]] = json.load(f)
-    except:
-        pass
-
 @dataclass
 class DataCollatorForNI:
 
@@ -43,6 +32,8 @@ class DataCollatorForNI:
     attention_masks: dict = None
     args: dict = None
     student_input: bool = False
+    lora_dict: dict = None
+    data_map: dict = None
 
     def __call__(self, batch, return_tensors=None):
 
@@ -196,13 +187,13 @@ class DataCollatorForNI:
                     # instance
                     instances.append(definition + task_input)
                     
-                if self.args.loramse and instance['Categories'][0] in data_map.values():
+                if self.args.loramse and instance['Categories'][0] in self.data_map.values():
                     if 'ko' in self.args.name:
-                        lora_A_params.append(lora_dict[instance['Categories'][0]]['param_tensor_A'])
-                        lora_B_params.append(lora_dict[instance['Categories'][0]]['param_tensor_B'])
+                        lora_A_params.append(self.lora_dict[instance['Categories'][0]]['param_tensor_A'])
+                        lora_B_params.append(self.lora_dict[instance['Categories'][0]]['param_tensor_B'])
                     else:
-                        lora_A_params.append(lora_dict[instance['Categories'][0]]['param_tensor_qv_A'])
-                        lora_B_params.append(lora_dict[instance['Categories'][0]]['param_tensor_qv_B'])
+                        lora_A_params.append(self.lora_dict[instance['Categories'][0]]['param_tensor_qv_A'])
+                        lora_B_params.append(self.lora_dict[instance['Categories'][0]]['param_tensor_qv_B'])
 
         else:
             sources, features, instances, s_sources, instruction_inputs, attention_masks = [

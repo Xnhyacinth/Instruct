@@ -3,11 +3,13 @@ Copyright (c) 2024 by Huanxuan Liao, huanxuanliao@gmail.com, All Rights Reserved
 Author: Xnhyacinth, Xnhyacinth@qq.com
 Date: 2024-02-27 18:34:50
 '''
+import shutil
+import os
+from torch import tensor
 from datasets import load_dataset
 import transformers
-import datasets 
-config = datasets.DownloadConfig(resume_download=True, max_retries=100) 
-from torch import tensor
+import datasets
+config = datasets.DownloadConfig(resume_download=True, max_retries=100)
 # dataset = datasets.load_from_disk(f'dataset/Image/NQ/test')
 # print(dataset['compressed_ctxs_5'][0]['compressed_prompt'][204:])
 # dataset = datasets.load_dataset( "codeparrot/self-instruct-starcoder", cache_dir="./hf_cache", download_config=config)
@@ -50,13 +52,13 @@ from torch import tensor
 #     data_dict = json.load(f)
 #     data_map = data_dict['data_map']
 # print(','.join(list(data_map.keys())))
-import os
-import shutil
+
 
 def move_file_to_parent_folder(directory, filename):
     directory = "output_meta"
     # 获取指定目录下的所有文件夹
-    folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+    folders = [f for f in os.listdir(
+        directory) if os.path.isdir(os.path.join(directory, f))]
     print(len(folders))
     l = 0
     # 移动文件到上一级目录
@@ -64,7 +66,8 @@ def move_file_to_parent_folder(directory, filename):
         try:
             for xx in os.listdir(f'{directory}/{folder}'):
                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
-                    src_file = os.path.join(directory, folder, xx, xxx, filename)
+                    src_file = os.path.join(
+                        directory, folder, xx, xxx, filename)
                     dst_file = os.path.join(directory, folder, xx, filename)
             if os.path.exists(src_file):
                 shutil.move(src_file, dst_file)
@@ -74,14 +77,15 @@ def move_file_to_parent_folder(directory, filename):
         except:
             pass
     print(l)
-import shutil
+
 
 def rm_file_to_parent_folder(directory, filename):
     filename0 = "check"
     filename1 = "pytorch"
     filename2 = "spiece"
     # 获取指定目录下的所有文件夹
-    folders = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+    folders = [f for f in os.listdir(
+        directory) if os.path.isdir(os.path.join(directory, f))]
     print(len(folders))
     # 移动文件到上一级目录
     for folder in folders:
@@ -90,34 +94,33 @@ def rm_file_to_parent_folder(directory, filename):
                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
                     for xxxx in os.listdir(f'{directory}/{folder}/{xx}/{xxx}'):
                         if filename1 in xxxx:
-                            src_file = os.path.join(directory, folder, xx, xxx, xxxx)
+                            src_file = os.path.join(
+                                directory, folder, xx, xxx, xxxx)
                             print(f"Removed {src_file}")
                             os.remove(src_file)
                             # os.removedirs(src_file)
                         if filename2 in xxxx:
-                            src_file = os.path.join(directory, folder, xx, xxx, xxxx)
+                            src_file = os.path.join(
+                                directory, folder, xx, xxx, xxxx)
                             print(f"Removed {src_file}")
                             os.remove(src_file)
                         if filename0 in xxxx:
-                            src_file = os.path.join(directory, folder, xx, xxx, xxxx)
+                            src_file = os.path.join(
+                                directory, folder, xx, xxx, xxxx)
                             # os.removedirs(src_file)
                             shutil.rmtree(src_file)
                             print(f"Removed {src_file}")
         except:
             pass
 
+
 # 指定目录和要移动的文件名
 directory = "output_meta"
 filename = "param_tensors.json"
 # filename = "check"
 # 调用函数移动文件
-rm_file_to_parent_folder(directory, filename)
 move_file_to_parent_folder(directory, filename)
-
-
-
-
-
+rm_file_to_parent_folder(directory, filename)
 
 
 # import os
