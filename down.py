@@ -64,19 +64,22 @@ def move_file_to_parent_folder(directory, filename):
     # 移动文件到上一级目录
     for folder in folders:
         try:
+            dst_file = os.path.join(directory, folder, filename)
+            if os.path.exists(dst_file):
+                l += 1
+            else:
+                print(folder)
+            # src_file = os.path.join(
+            #                     directory, folder, 'output_pos2_pooler', filename)
+            # dst_file = os.path.join(directory, folder, filename)
             for xx in os.listdir(f'{directory}/{folder}'):
                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
                     src_file = os.path.join(
                         directory, folder, xx, xxx, filename)
-                    dst_file = os.path.join(directory, folder, filename)
-            # src_file = os.path.join(
-            #                     directory, folder, 'output_pos2_pooler', filename)
-            # dst_file = os.path.join(directory, folder, filename)
             if os.path.exists(src_file):
                 shutil.move(src_file, dst_file)
                 print(f"Moved {src_file} to {dst_file}")
-            if os.path.exists(dst_file):
-                l += 1
+            
         except:
             pass
     print(l)

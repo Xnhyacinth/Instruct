@@ -846,26 +846,28 @@ def main():
     # Data collator
     model_args.s_num_pos_examples = data_args.s_num_pos_examples
     if model_args.kd:
-        with open('src/data_dict.json', 'r') as f:
-            data_dict = json.load(f)
-            data_map = data_dict['data_map']
-        lora_dict = {}
-        output_lora_path = 'output_meta'
-        if data_args.num_pos_examples == 0:
-            output_lora_path = 'output_meta_pos0'
-        for file in os.listdir(output_lora_path):
-            try:
-                with open(f'{output_lora_path}/{file}/param_tensors.json', 'r') as f:
-                    lora_d = json.load(f)
-                    if 'ko' not in model_args.name:
-                        lora_d.pop('param_tensor_A')
-                        lora_d.pop('param_tensor_B')
-                    else:
-                        lora_d.pop('param_tensor_qv_A')
-                        lora_d.pop('param_tensor_qv_B')
-                    lora_dict[data_map[file]] = lora_d
-            except:
-                pass
+        data_map, lora_dict = None, None
+        if model_args.loramse:
+            with open('src/data_dict.json', 'r') as f:
+                data_dict = json.load(f)
+                data_map = data_dict['data_map']
+            lora_dict = {}
+            output_lora_path = 'output_meta'
+            if data_args.num_pos_examples == 0:
+                output_lora_path = 'output_meta_pos0'
+            for file in os.listdir(output_lora_path):
+                try:
+                    with open(f'{output_lora_path}/{file}/param_tensors.json', 'r') as f:
+                        lora_d = json.load(f)
+                        if 'ko' not in model_args.name:
+                            lora_d.pop('param_tensor_A')
+                            lora_d.pop('param_tensor_B')
+                        else:
+                            lora_d.pop('param_tensor_qv_A')
+                            lora_d.pop('param_tensor_qv_B')
+                        lora_dict[data_map[file]] = lora_d
+                except:
+                    pass
         data_collator = DataCollatorForNI(
             tokenizer,
             model=t_model,

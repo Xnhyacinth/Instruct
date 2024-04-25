@@ -284,6 +284,7 @@ fi
 
 echo name: ${name}
 echo run_file: ${run_file}
+echo output_dir: ${output_dir}
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --do_train \
     --do_predict \
