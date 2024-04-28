@@ -63,15 +63,11 @@ def move_file_to_parent_folder(directory, filename):
     l = 0
     # 移动文件到上一级目录
     for folder in folders:
-        dst_file = os.path.join(directory, folder, filename)
-        if os.path.exists(dst_file):
-            l += 1
-        else:
-            print(folder)
+        try:
+            dst_file = os.path.join(directory, folder, filename)
             # src_file = os.path.join(
             #                     directory, folder, 'output_pos2_pooler', filename)
             # dst_file = os.path.join(directory, folder, filename)
-        try:
             for xx in os.listdir(f'{directory}/{folder}'):
                 for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
                     src_file = os.path.join(
@@ -82,6 +78,10 @@ def move_file_to_parent_folder(directory, filename):
             
         except:
             pass
+        if os.path.exists(dst_file):
+            l += 1
+        else:
+            print(folder)
     print(l)
 
 

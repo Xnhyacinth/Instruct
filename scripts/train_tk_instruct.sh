@@ -132,7 +132,7 @@ if [ "$tune" == "lora" ];then
         if [ "$pos" == "0" ];then
             output="output_meta_pos0/$data_type/${output_dir}"
         fi
-        output_dir=output
+        output_dir=${output}
         gradient_accumulation_steps=2
         extra_args="${extra_args} --data_type $data_type"
         max_num_instances=10000 # 10000 2000, 3000
@@ -261,11 +261,11 @@ if [ "$tune" == "kd" ];then
             max_num_instances=1200 
         fi
         if [ "$data_type" == "QAx" ];then
-            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC,TtC,TS"
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,GC,TtC,TS,Mathematics,CtT"
             max_num_instances=800 #700
         fi
         if [ "$data_type" == "QAxx" ];then
-            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,SC,NSD,GC,WRC,TtC,TS,StC,Explanation"
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,GC,TtC,TS,StC,Explanation,Mathematics,CtT,II"
             max_num_instances=800 #700
         fi
         extra_args="${extra_args} --data_type $data_type"
