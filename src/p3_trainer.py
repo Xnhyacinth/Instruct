@@ -478,11 +478,11 @@ class P3KDTrainer(Seq2SeqTrainer):
 
         observed_num_examples = 0
         # Main evaluation loop
-        loss_list, metadata = [], []
-        start_idx = 0
         for step, inputs in enumerate(dataloader):
+            # loss_list, metadata = [], []
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
+
             if observed_batch_size is not None:
                 observed_num_examples += observed_batch_size
                 # For batch samplers, batch_size is not known by the dataloader in advance.
@@ -491,42 +491,47 @@ class P3KDTrainer(Seq2SeqTrainer):
 
             # Prediction step
             loss, logits, labels = self.prediction_step(
-                model, inputs[2:7], prediction_loss_only, ignore_keys=ignore_keys)
+                model, inputs[2:], prediction_loss_only, ignore_keys=ignore_keys)
 
-            loss_list += loss.float().cpu().detach().numpy().tolist()
-
-            for dp in inputs[7]:
-                n_options = len(dp)
-                metadata.append({
-                    "indices": list(range(start_idx, start_idx + n_options)),
-                    "options": dp,
-                })
-                start_idx += n_options
+            # loss_list += loss.float().cpu().detach().numpy().tolist()
 
             if is_torch_tpu_available():
                 xm.mark_step()
 
+            # dist.barrier()
+            # world_size = dist.get_world_size()
+            # metadata_gather = [None for _ in range(world_size)]
+            # loss_list_gather = [None for _ in range(world_size)]
+            # dist.all_gather_object(metadata_gather, metadata)
+            # dist.all_gather_object(loss_list_gather, loss_list)
+            # for i in range(world_size):
+            #     metadatas.extend(metadata_gather[i])
+            #     loss_lists.extend(loss_list_gather[i])
+            
             # Update containers on host
             if loss is not None:
-                losses = self._nested_gather(loss.repeat(batch_size))
+                losses = self._nested_gather(loss)
                 losses_host = losses if losses_host is None else torch.cat(
                     (losses_host, losses), dim=0)
-            if labels is not None:
-                labels = self._pad_across_processes(labels)
-                labels = self._nested_gather(labels)
-                labels_host = labels if labels_host is None else nested_concat(
-                    labels_host, labels, padding_index=-100)
-            if logits is not None:
-                logits = self._pad_across_processes(logits)
-                logits = self._nested_gather(logits)
-                if self.preprocess_logits_for_metrics is not None:
-                    logits = self.preprocess_logits_for_metrics(logits, labels)
-                preds_host = logits if preds_host is None else nested_concat(
-                    preds_host, logits, padding_index=-100)
-            self.control = self.callback_handler.on_prediction_step(
-                args, self.state, self.control)
+            # if labels is not None:
+            #     labels = self._pad_across_processes(labels)
+            #     labels = self._nested_gather(labels)
+            #     labels_host = labels if labels_host is None else nested_concat(
+            #         labels_host, labels, padding_index=-100)
+            # if logits is not None:
+            #     logits = self._pad_across_processes(logits)
+            #     logits = self._nested_gather(logits)
+            #     if self.preprocess_logits_for_metrics is not None:
+            #         logits = self.preprocess_logits_for_metrics(logits, labels)
+            #     preds_host = logits if preds_host is None else nested_concat(
+            #         preds_host, logits, padding_index=-100)
+            # self.control = self.callback_handler.on_prediction_step(
+            #     args, self.state, self.control
 
-            # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
+            # print(len(self._nested_gather(loss.float().cpu().detach().numpy().tolist())))
+            # print(len(self._nested_gather(metadata)))
+
+            # # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
             if args.eval_accumulation_steps is not None and (step + 1) % args.eval_accumulation_steps == 0:
                 if losses_host is not None:
                     losses = nested_numpify(losses_host)
@@ -545,7 +550,7 @@ class P3KDTrainer(Seq2SeqTrainer):
 
                 # Set back to None to begin a new accumulation
                 losses_host, preds_host, labels_host = None, None, None
-
+                
         if args.past_index and hasattr(self, "_past"):
             # Clean the state at the end of the evaluation loop
             delattr(self, "_past")
@@ -563,7 +568,7 @@ class P3KDTrainer(Seq2SeqTrainer):
             labels = nested_numpify(labels_host)
             all_labels = labels if all_labels is None else nested_concat(
                 all_labels, labels, padding_index=-100)
-
+        
         # Number of samples
         if has_length(eval_dataset):
             num_samples = len(eval_dataset)
@@ -574,21 +579,41 @@ class P3KDTrainer(Seq2SeqTrainer):
         else:
             num_samples = observed_num_examples
 
+        # print(len(metadata))
+        # print(len(loss_list))
+        # print(len(eval_dataset))
+        # print(metadatas[-3:])
+        # print(eval_dataset[-3:])
+        # print(num_samples)
+        start_idx = 0
+        metadata = []
+        for i in range(len(eval_dataset)):
+            dp = eval_dataset[i]['Instance']['options']
+            n_options = len(dp)
+            metadata.append({
+                "indices": list(range(start_idx, start_idx + n_options)),
+                "options": dp,
+            })
+            start_idx += n_options
+        # print(eval_dataset[-1])
+
         # Number of losses has been rounded to a multiple of batch_size and in a distributed training, the number of
         # samplers has been rounded to a multiple of batch_size, so we truncate.
         if all_losses is not None:
-            all_losses = all_losses[:num_samples]
+            all_losses = all_losses
         if all_preds is not None:
             all_preds = nested_truncate(all_preds, num_samples)
         if all_labels is not None:
             all_labels = nested_truncate(all_labels, num_samples)
 
         # Metrics!
-        if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
-            metrics = self.compute_metrics(
-                dataset=eval_dataset, metadata=metadata, preds=np.array(loss_list), save_prefix=metric_key_prefix)
-        else:
-            metrics = {}
+        metrics = self.compute_metrics(
+            dataset=eval_dataset, metadata=metadata, preds=np.array(all_losses), save_prefix=metric_key_prefix)
+        # if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
+        #     metrics = self.compute_metrics(
+        #         dataset=eval_dataset, metadata=metadata, preds=np.array(loss_list), save_prefix=metric_key_prefix)
+        # else:
+        #     metrics = {}
 
         metrics["global_step"] = self.state.global_step
 
