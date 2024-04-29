@@ -136,6 +136,18 @@ if [ "$tune" == "lora" ];then
         gradient_accumulation_steps=2
         extra_args="${extra_args} --data_type $data_type"
         max_num_instances=10000 # 10000 2000, 3000
+        if [ "$data_type" == "QA" ];then
+            max_num_instances=600
+        fi
+        if [ "$data_type" == "PE" ];then
+            max_num_instances=1200
+        fi
+        if [ "$data_type" == "QG" ];then
+            max_num_instances=2000
+        fi
+        if [ "$data_type" == "SA" ];then
+            max_num_instances=3000
+        fi
     fi
 fi
 

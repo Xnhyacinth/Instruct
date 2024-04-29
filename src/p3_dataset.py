@@ -141,7 +141,7 @@ class P3(datasets.GeneratorBasedBuilder):
         # with open(path, encoding="utf-8") as split_f:
         #     for line in split_f:
         #         task_name = line.strip()
-        for task_name in tasks:
+        for task_name in tasks[:2]:
             task_path = os.path.join(task_dir, task_name + ".json")
             with open(task_path, encoding="utf-8") as task_f:
                 s = task_f.read()

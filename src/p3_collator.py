@@ -175,6 +175,6 @@ class DataCollatorForP3:
             features = pooled_sentence.mean(dim=1).cpu()
             features = torch.Tensor(features)
 
-            return concat_ids, concat_attention_mask, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, features, options
+            return concat_ids, concat_attention_mask, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, features
         else:
-            return input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, options
+            return input_ids, attention_mask, decoder_input_ids, decoder_attention_mask

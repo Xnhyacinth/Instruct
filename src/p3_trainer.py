@@ -11,6 +11,7 @@ from transformers import (
 )
 from losses import att_mse_loss, cos_loss
 from model import T5LoraWrapper
+import torch.distributed as dist
 
 
 class DenserEvalCallback(TrainerCallback):
@@ -146,9 +147,11 @@ class P3KDTrainer(Seq2SeqTrainer):
 
         for i in range(bsz):
             with torch.no_grad():
-                attention_mask = support_attention_mask[i * demo_length:(i+1)*demo_length]
+                attention_mask = support_attention_mask[i *
+                                                        demo_length:(i+1)*demo_length]
                 hidden_states = self.t_model.encoder(
-                    input_ids=support_input_ids[i * demo_length:(i+1)*demo_length],
+                    input_ids=support_input_ids[i *
+                                                demo_length:(i+1)*demo_length],
                     attention_mask=attention_mask
                 ).last_hidden_state
                 # support_hidden_states: k * src_len * hidden_dim
@@ -314,24 +317,32 @@ class P3KDTrainer(Seq2SeqTrainer):
         # m * tar_len
         target_input_ids, target_attention_mask = batch[4], batch[5]
         features = batch[6]
-        target_input_ids[target_input_ids == self.tokenizer.pad_token_id] = -100
-        
+        target_input_ids[target_input_ids ==
+                         self.tokenizer.pad_token_id] = -100
+
         # forward pass
         bsz = query_input_ids.size(0)
         support_hidden_states, support_attention_mask = self.precompute_support_hidden_states(
             bsz, [support_input_ids, support_attention_mask])
 
-        query_hidden_states = self.t_model.encoder(input_ids=query_input_ids, attention_mask=query_attention_mask).last_hidden_state
+        query_hidden_states = self.t_model.encoder(
+            input_ids=query_input_ids, attention_mask=query_attention_mask).last_hidden_state
         # concat w.r.t sequence length
-        max_len = max([m.sum() for m in support_attention_mask]).item() + query_input_ids.size(1)
+        max_len = max([m.sum() for m in support_attention_mask]
+                      ).item() + query_input_ids.size(1)
 
-        all_hidden_states = torch.ones((bsz, max_len, query_hidden_states.size(-1)), dtype=torch.bfloat16, device=query_input_ids.device) * 0
-        all_attention_mask = torch.ones((bsz, max_len), dtype=torch.long, device=query_input_ids.device) * 0
+        all_hidden_states = torch.ones((bsz, max_len, query_hidden_states.size(
+            -1)), dtype=torch.bfloat16, device=query_input_ids.device) * 0
+        all_attention_mask = torch.ones(
+            (bsz, max_len), dtype=torch.long, device=query_input_ids.device) * 0
         for i in range(bsz):
-            l = support_attention_mask[i].sum().item() + query_input_ids.size(1)
-            all_hidden_states[i, :l] = torch.cat((support_hidden_states[i], query_hidden_states[i]))
-            all_attention_mask[i, :l] = torch.cat((support_attention_mask[i].squeeze(0), query_attention_mask[i]))
-        
+            l = support_attention_mask[i].sum(
+            ).item() + query_input_ids.size(1)
+            all_hidden_states[i, :l] = torch.cat(
+                (support_hidden_states[i], query_hidden_states[i]))
+            all_attention_mask[i, :l] = torch.cat(
+                (support_attention_mask[i].squeeze(0), query_attention_mask[i]))
+
         output_hidden_states = False
         output_attentions = False
         if self.config.use_hd:
@@ -344,7 +355,7 @@ class P3KDTrainer(Seq2SeqTrainer):
                 encoder_outputs=[all_hidden_states],
                 labels=target_input_ids,
                 decoder_attention_mask=target_attention_mask,
-                return_dict=True, 
+                return_dict=True,
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states)
         # t_loss = t_outputs.get("loss")
@@ -357,7 +368,7 @@ class P3KDTrainer(Seq2SeqTrainer):
             decoder_attention_mask=target_attention_mask,
             features=features,
             use_cache=False,
-            return_dict=True, 
+            return_dict=True,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states
         )
@@ -371,9 +382,10 @@ class P3KDTrainer(Seq2SeqTrainer):
                 + (1 - self.config.alpha_kd) * loss
             )
         if self.config.use_kl:
-        #     loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
-        # if self.config.logit_stand:
-            loss += self.kd_loss(logits, t_logits, self.config.temperature, self.config.logit_stand) * 5
+            #     loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
+            # if self.config.logit_stand:
+            loss += self.kd_loss(logits, t_logits,
+                                 self.config.temperature, self.config.logit_stand) * 5
         if self.config.use_hd:
             loss += self.cal_hd(outputs.get("encoder_hidden_states"),
                                 t_outputs.get("encoder_hidden_states"))
@@ -795,11 +807,11 @@ class P3Trainer(Seq2SeqTrainer):
 
         observed_num_examples = 0
         # Main evaluation loop
-        loss_list, metadata = [], []
-        start_idx = 0
         for step, inputs in enumerate(dataloader):
+            # loss_list, metadata = [], []
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
+
             if observed_batch_size is not None:
                 observed_num_examples += observed_batch_size
                 # For batch samplers, batch_size is not known by the dataloader in advance.
@@ -808,42 +820,47 @@ class P3Trainer(Seq2SeqTrainer):
 
             # Prediction step
             loss, logits, labels = self.prediction_step(
-                model, inputs[:4], prediction_loss_only, ignore_keys=ignore_keys)
+                model, inputs, prediction_loss_only, ignore_keys=ignore_keys)
 
-            loss_list += loss.float().cpu().detach().numpy().tolist()
-
-            for dp in inputs[4]:
-                n_options = len(dp)
-                metadata.append({
-                    "indices": list(range(start_idx, start_idx + n_options)),
-                    "options": dp,
-                })
-                start_idx += n_options
+            # loss_list += loss.float().cpu().detach().numpy().tolist()
 
             if is_torch_tpu_available():
                 xm.mark_step()
 
+            # dist.barrier()
+            # world_size = dist.get_world_size()
+            # metadata_gather = [None for _ in range(world_size)]
+            # loss_list_gather = [None for _ in range(world_size)]
+            # dist.all_gather_object(metadata_gather, metadata)
+            # dist.all_gather_object(loss_list_gather, loss_list)
+            # for i in range(world_size):
+            #     metadatas.extend(metadata_gather[i])
+            #     loss_lists.extend(loss_list_gather[i])
+            
             # Update containers on host
             if loss is not None:
-                losses = self._nested_gather(loss.repeat(batch_size))
+                losses = self._nested_gather(loss)
                 losses_host = losses if losses_host is None else torch.cat(
                     (losses_host, losses), dim=0)
-            if labels is not None:
-                labels = self._pad_across_processes(labels)
-                labels = self._nested_gather(labels)
-                labels_host = labels if labels_host is None else nested_concat(
-                    labels_host, labels, padding_index=-100)
-            if logits is not None:
-                logits = self._pad_across_processes(logits)
-                logits = self._nested_gather(logits)
-                if self.preprocess_logits_for_metrics is not None:
-                    logits = self.preprocess_logits_for_metrics(logits, labels)
-                preds_host = logits if preds_host is None else nested_concat(
-                    preds_host, logits, padding_index=-100)
-            self.control = self.callback_handler.on_prediction_step(
-                args, self.state, self.control)
+            # if labels is not None:
+            #     labels = self._pad_across_processes(labels)
+            #     labels = self._nested_gather(labels)
+            #     labels_host = labels if labels_host is None else nested_concat(
+            #         labels_host, labels, padding_index=-100)
+            # if logits is not None:
+            #     logits = self._pad_across_processes(logits)
+            #     logits = self._nested_gather(logits)
+            #     if self.preprocess_logits_for_metrics is not None:
+            #         logits = self.preprocess_logits_for_metrics(logits, labels)
+            #     preds_host = logits if preds_host is None else nested_concat(
+            #         preds_host, logits, padding_index=-100)
+            # self.control = self.callback_handler.on_prediction_step(
+            #     args, self.state, self.control
 
-            # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
+            # print(len(self._nested_gather(loss.float().cpu().detach().numpy().tolist())))
+            # print(len(self._nested_gather(metadata)))
+
+            # # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
             if args.eval_accumulation_steps is not None and (step + 1) % args.eval_accumulation_steps == 0:
                 if losses_host is not None:
                     losses = nested_numpify(losses_host)
@@ -862,7 +879,7 @@ class P3Trainer(Seq2SeqTrainer):
 
                 # Set back to None to begin a new accumulation
                 losses_host, preds_host, labels_host = None, None, None
-
+                
         if args.past_index and hasattr(self, "_past"):
             # Clean the state at the end of the evaluation loop
             delattr(self, "_past")
@@ -880,7 +897,7 @@ class P3Trainer(Seq2SeqTrainer):
             labels = nested_numpify(labels_host)
             all_labels = labels if all_labels is None else nested_concat(
                 all_labels, labels, padding_index=-100)
-
+        
         # Number of samples
         if has_length(eval_dataset):
             num_samples = len(eval_dataset)
@@ -891,21 +908,41 @@ class P3Trainer(Seq2SeqTrainer):
         else:
             num_samples = observed_num_examples
 
+        # print(len(metadata))
+        # print(len(loss_list))
+        # print(len(eval_dataset))
+        # print(metadatas[-3:])
+        # print(eval_dataset[-3:])
+        # print(num_samples)
+        start_idx = 0
+        metadata = []
+        for i in range(len(eval_dataset)):
+            dp = eval_dataset[i]['Instance']['options']
+            n_options = len(dp)
+            metadata.append({
+                "indices": list(range(start_idx, start_idx + n_options)),
+                "options": dp,
+            })
+            start_idx += n_options
+        # print(eval_dataset[-1])
+
         # Number of losses has been rounded to a multiple of batch_size and in a distributed training, the number of
         # samplers has been rounded to a multiple of batch_size, so we truncate.
         if all_losses is not None:
-            all_losses = all_losses[:num_samples]
+            all_losses = all_losses
         if all_preds is not None:
             all_preds = nested_truncate(all_preds, num_samples)
         if all_labels is not None:
             all_labels = nested_truncate(all_labels, num_samples)
 
         # Metrics!
-        if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
-            metrics = self.compute_metrics(
-                dataset=eval_dataset, metadata=metadata, preds=np.array(loss_list), save_prefix=metric_key_prefix)
-        else:
-            metrics = {}
+        metrics = self.compute_metrics(
+            dataset=eval_dataset, metadata=metadata, preds=np.array(all_losses), save_prefix=metric_key_prefix)
+        # if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
+        #     metrics = self.compute_metrics(
+        #         dataset=eval_dataset, metadata=metadata, preds=np.array(loss_list), save_prefix=metric_key_prefix)
+        # else:
+        #     metrics = {}
 
         metrics["global_step"] = self.state.global_step
 

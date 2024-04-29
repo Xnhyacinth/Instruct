@@ -598,6 +598,7 @@ def main():
                 f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     else:
         model = model_cls
+        t_model = model
     # if "t5-xxl" not in model_args.model_name_or_path:
     #     model.resize_token_embeddings(len(tokenizer))
 
@@ -1036,7 +1037,7 @@ def main():
             predictions.append(prediction.strip())
 
         references = list(set([e['Task'] for e in dataset]))
-
+        
         perf = evaluate(dataset, predictions, references)
 
         if save_prefix is not None:
@@ -1104,17 +1105,30 @@ def main():
 
     # Initialize our Trainer
     if 'p3' in data_args.data_dir:
-        trainer = P3KDTrainer(
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset if training_args.do_train else None,
-            eval_dataset=eval_dataset if training_args.do_eval else None,
-            tokenizer=tokenizer,
-            data_collator=data_collator,
-            compute_metrics=compute_p3_metrics if training_args.predict_with_generate else None,
-            callbacks=[
-                DenserEvalCallback] if training_args.denser_evaluation else None
-        )
+        if model_args.kd:
+            trainer = P3KDTrainer(
+                model=model,
+                args=training_args,
+                train_dataset=train_dataset if training_args.do_train else None,
+                eval_dataset=eval_dataset if training_args.do_eval else None,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                compute_metrics=compute_p3_metrics if training_args.predict_with_generate else None,
+                callbacks=[
+                    DenserEvalCallback] if training_args.denser_evaluation else None
+            )
+        else:
+            trainer = P3Trainer(
+                model=model,
+                args=training_args,
+                train_dataset=train_dataset if training_args.do_train else None,
+                eval_dataset=eval_dataset if training_args.do_eval else None,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                compute_metrics=compute_p3_metrics if training_args.predict_with_generate else None,
+                callbacks=[
+                    DenserEvalCallback] if training_args.denser_evaluation else None
+            )
     else:
         trainer = NIKDTrainer(
             model=model,
@@ -1188,7 +1202,6 @@ def main():
 
     if training_args.do_predict:
         logger.info("*** Predict ***")
-        delattr(trainer, 't_model')
         predict_results = trainer.predict(
             predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
         )
@@ -1206,21 +1219,21 @@ def main():
 
         all_metrics.update(metrics)
 
-        if trainer.is_world_process_zero():
-            if training_args.predict_with_generate:
-                predictions = tokenizer.batch_decode(
-                    predict_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
-                )
-                predictions = [pred.strip() for pred in predictions]
-                # output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
-                # with open(output_prediction_file, "w") as writer:
-                #     writer.write("\n".join(predictions))
-                output_prediction_file = os.path.join(
-                    training_args.output_dir, "predicted_examples.jsonl")
-                with open(output_prediction_file, "w") as fout:
-                    for example, prediction in zip(predict_dataset, predictions):
-                        example["prediction"] = prediction
-                        fout.write(json.dumps(example) + "\n")
+        # if trainer.is_world_process_zero():
+        #     if training_args.predict_with_generate:
+        #         predictions = tokenizer.batch_decode(
+        #             predict_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
+        #         )
+        #         predictions = [pred.strip() for pred in predictions]
+        #         # output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
+        #         # with open(output_prediction_file, "w") as writer:
+        #         #     writer.write("\n".join(predictions))
+        #         output_prediction_file = os.path.join(
+        #             training_args.output_dir, "predicted_examples.jsonl")
+        #         with open(output_prediction_file, "w") as fout:
+        #             for example, prediction in zip(predict_dataset, predictions):
+        #                 example["prediction"] = prediction
+        #                 fout.write(json.dumps(example) + "\n")
 
     if (training_args.do_train or training_args.do_eval or training_args.do_predict) and trainer.is_world_process_zero():
         with open(os.path.join(training_args.output_dir, "metrics.json"), "w") as fout:
