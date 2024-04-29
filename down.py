@@ -55,7 +55,7 @@ config = datasets.DownloadConfig(resume_download=True, max_retries=100)
 
 
 def move_file_to_parent_folder(directory, filename):
-    directory = "output_meta"
+    # directory = "output_meta"
     # 获取指定目录下的所有文件夹
     folders = [f for f in os.listdir(
         directory) if os.path.isdir(os.path.join(directory, f))]
@@ -75,7 +75,7 @@ def move_file_to_parent_folder(directory, filename):
             if os.path.exists(src_file):
                 shutil.move(src_file, dst_file)
                 print(f"Moved {src_file} to {dst_file}")
-            
+
         except:
             pass
         if os.path.exists(dst_file):

@@ -55,13 +55,15 @@ from transformers import (
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
-from p3_trainer import P3Trainer
+from p3_trainer import P3Trainer, P3KDTrainer
 from p3_collator import DataCollatorForP3
 from utils import expand_dataset_to_prompts, load_dataset_names, map_prompt_name_to_task_name
 from model import T5LoraWrapper, LoRAT5
 from ni_collator import DataCollatorForNI
 from ni_trainer import NIKDTrainer, NITrainer, DenserEvalCallback
 from compute_metrics import compute_metrics, compute_grouped_metrics
+from fid_eval import FID_METADATA
+from promptsource.templates import DatasetTemplates
 
 
 set_progress_bar_enabled(False)
@@ -234,6 +236,18 @@ class ModelArguments:
             "help": "Whether to do_sample."
         },
     )
+    loramse: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use loramse."
+        },
+    )
+    logit_stand: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use logit_stand."
+        },
+    )
     pooling: Optional[str] = field(
         default="first_last_avg", metadata={"help": "Method for getting the instructions' features."}
     )
@@ -372,6 +386,9 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "tk_instruct will train a model combining all valid instruction encodings. This will overwrite the other settings about instruction encoding."}
     )
+    data_type: Optional[str] = field(
+        default=None, metadata={"help": "The task type of model."}
+    )
 
     def __post_init__(self):
         pass
@@ -470,7 +487,7 @@ def main():
 
         raw_datasets = load_dataset(
             "src/p3_dataset.py",
-            dataset_list=prompt_identifiers,
+            dataset_list=prompt_identifiers[:2],
             data_dir=data_args.data_dir,
             task_dir=data_args.task_dir,
             cache_dir=model_args.cache_dir,
@@ -484,7 +501,8 @@ def main():
             task_dir=data_args.task_dir,
             cache_dir=model_args.cache_dir,
             max_num_instances_per_task=data_args.max_num_instances_per_task,
-            max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task
+            max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task,
+            data_type=data_args.data_type
         )
 
     # Load pretrained model and tokenizer
@@ -580,8 +598,8 @@ def main():
                 f"trainable params: {trainable_params / 2 ** 20:.2f}M || all params: {all_param / 2 ** 20:.2f}M || trainable%: {100 * trainable_params / all_param:.2f}%")
     else:
         model = model_cls
-    if "t5-xxl" not in model_args.model_name_or_path:
-        model.resize_token_embeddings(len(tokenizer))
+    # if "t5-xxl" not in model_args.model_name_or_path:
+    #     model.resize_token_embeddings(len(tokenizer))
 
     if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
         assert (
@@ -862,6 +880,7 @@ def main():
         datasets_list = load_dataset_names('t0', "eval_datasets")
         data_collator = DataCollatorForP3(
             tokenizer,
+            model=t_model,
             padding="max_length" if data_args.pad_to_max_length else "longest",
             max_source_length=data_args.max_source_length,
             max_target_length=data_args.max_target_length,
@@ -881,6 +900,28 @@ def main():
             student_input=data_args.s_num_pos_examples != data_args.num_pos_examples if training_args.do_train else False,
         )
     else:
+        data_map, lora_dict = None, None
+        if model_args.loramse:
+            with open('src/data_dict.json', 'r') as f:
+                data_dict = json.load(f)
+                data_map = data_dict['data_map']
+            lora_dict = {}
+            output_lora_path = 'output_meta'
+            if data_args.num_pos_examples == 0:
+                output_lora_path = 'output_meta_pos0'
+            for file in os.listdir(output_lora_path):
+                try:
+                    with open(f'{output_lora_path}/{file}/param_tensors.json', 'r') as f:
+                        lora_d = json.load(f)
+                        if 'ko' not in model_args.name:
+                            lora_d.pop('param_tensor_A')
+                            lora_d.pop('param_tensor_B')
+                        else:
+                            lora_d.pop('param_tensor_qv_A')
+                            lora_d.pop('param_tensor_qv_B')
+                        lora_dict[data_map[file]] = lora_d
+                except:
+                    pass
         data_collator = DataCollatorForNI(
             tokenizer,
             model=t_model,
@@ -901,6 +942,8 @@ def main():
             attention_masks=attention_masks if model_args.whitening else None,
             args=model_args,
             student_input=data_args.s_num_pos_examples != data_args.num_pos_examples if training_args.do_train else False,
+            lora_dict=lora_dict,
+            data_map=data_map
         )
     # we don't want to remove unused columns because we will prepare each batch during training,
     # and some of the information will aslo be used in evaluation.
@@ -910,7 +953,8 @@ def main():
     def compute_ni_metrics(dataset, preds, save_prefix=None):
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         references = [e["Instance"]["output"] for e in dataset]
-        result = compute_metrics(predictions=decoded_preds, references=references)
+        result = compute_metrics(
+            predictions=decoded_preds, references=references)
         result_per_task = compute_grouped_metrics(
             predictions=decoded_preds, references=references, groups=dataset["Task"])
         result.update(result_per_task)
@@ -999,15 +1043,17 @@ def main():
             df = pd.DataFrame(
                 columns=["task_name", "prompt_name", "performance", "eval_mode"])
             results_file = os.path.join(training_args.output_dir,
-                         f"{save_prefix}_eval_results.csv")
+                                        f"{save_prefix}_eval_results.csv")
             for prompt, (metric, test_perf) in perf.items():
                 task_name = map_prompt_name_to_task_name(prompt, datasets_list)
-                df.loc[len(df.index)] = [task_name, prompt, test_perf, "rank_classification"]
+                df.loc[len(df.index)] = [task_name, prompt,
+                                         test_perf, "rank_classification"]
 
                 # save after each dataset is evaluated
                 df.to_csv(results_file)
             # aggreate results and get mean/median
-            agg_results_file = os.path.join(training_args.output_dir, "results_agg_{}.csv".format(save_prefix))
+            agg_results_file = os.path.join(
+                training_args.output_dir, "results_agg_{}.csv".format(save_prefix))
 
             df = df[['task_name', 'performance']]
             mean = df.groupby("task_name").mean()
@@ -1017,19 +1063,21 @@ def main():
             mean.to_csv(agg_results_file)
 
             average_df = pd.DataFrame({'task_name': ['avg_score'],
-                                    'mean': [mean['mean'].mean()],
-                                    'median': [mean['median'].median()]})
+                                       'mean': [mean['mean'].mean()],
+                                       'median': [mean['median'].median()]})
             average_df = average_df.set_index('task_name')
 
             mean = pd.concat([mean, average_df], ignore_index=False, axis=0)
             mean.to_csv(agg_results_file)
-    
+
         references = [[e["Instance"]["output"]] for e in dataset]
-        result = compute_metrics(predictions=predictions, references=references)
+        result = compute_metrics(
+            predictions=predictions, references=references)
         result_per_task = compute_grouped_metrics(
             predictions=predictions, references=references, groups=dataset["Task"])
         result.update(result_per_task)
-        categories = [map_prompt_name_to_task_name(it, datasets_list) for it in dataset["Task"]]
+        categories = [map_prompt_name_to_task_name(
+            it, datasets_list) for it in dataset["Task"]]
         result_per_category = compute_grouped_metrics(
             predictions=predictions, references=references, groups=categories)
         result.update(result_per_category)
@@ -1056,7 +1104,7 @@ def main():
 
     # Initialize our Trainer
     if 'p3' in data_args.data_dir:
-        trainer = P3Trainer(
+        trainer = P3KDTrainer(
             model=model,
             args=training_args,
             train_dataset=train_dataset if training_args.do_train else None,
@@ -1140,7 +1188,7 @@ def main():
 
     if training_args.do_predict:
         logger.info("*** Predict ***")
-
+        delattr(trainer, 't_model')
         predict_results = trainer.predict(
             predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
         )

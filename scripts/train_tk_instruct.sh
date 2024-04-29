@@ -69,7 +69,7 @@ if [ "$dataset" == "p3" ];then
     name=experiment_p3_pos${pos}_pooler-${m}_lr${lr}_warm${warmup_ratio}
     output_dir=output_p3_pos${pos}_pooler/${m}_lr${lr}_warm${warmup_ratio}
     run_file=run_s2s_kd_ac.py
-    max_num_instances=5000
+    max_num_instances=500
 fi
 
 if [ "$tune" != "full" ];then
@@ -273,6 +273,130 @@ if [ "$tune" == "kd" ];then
     fi
     
 fi
+
+if [ "$tune" == "kd_p3" ];then
+    t_model=output/${model}_lr5e-5
+    if [ "$allenai" == "fid" ];then
+        if [ "$m" == "t5-base" ];then
+            t_model=qinyuany/fid-icl-t5-lm-base
+            if [ "$pos" == "0" ];then
+                t_model=output_pos0/t5-base_lr1e-4_warm0.05
+            fi
+        fi
+        if [ "$m" == "t5-xl" ];then
+            t_model=qinyuany/fid-icl-t5-lm-xl
+            if [ "$pos" == "0" ];then
+                t_model=allenai/tk-instruct-3b-def 
+            fi
+            gradient_accumulation_steps=8
+        fi
+        name="${name}_fid"
+        output_dir="${output_dir}_fid"
+    fi
+    if [ "$use_kl" == "ce" ];then
+        name="${name}_ce"
+        output_dir="${output_dir}_ce"
+        extra_args="${extra_args} --use_ce True"
+    fi
+    if [ "$use_kl" == "kl" ];then
+        name="${name}_kl"
+        output_dir="${output_dir}_kl"
+        extra_args="${extra_args} --use_kl True"
+    fi
+    if [ "$use_kl" == "ce_kl" ];then
+        name="${name}_ce_kl"
+        output_dir="${output_dir}_ce_kl"
+        extra_args="${extra_args} --use_kl True --use_ce True"
+    fi
+    if [ "$use_kl" == "all" ];then
+        name="${name}_all"
+        output_dir="${output_dir}_all"
+        extra_args="${extra_args} --use_kl True --use_ce True --use_hd True --use_attn True"
+    fi
+    lora=hyperlora_kd
+    if [ "$ffn" == "ffn" ];then
+        name="${name}_ffn"
+        output_dir="${output_dir}_ffn"
+        lora="${lora}_ffn"
+    fi
+    if [ "$ko" == "ko" ];then
+        name="${name}_ko"
+        output_dir="${output_dir}_ko"
+        lora="${lora}_ko"
+    fi
+    if [ "$prefix" != "0" ];then
+        name="${name}_prefix${prefix}"
+        output_dir="${output_dir}_prefix${prefix}"
+        lora="${lora}_prefix"
+        extra_args="${extra_args} --prefix_length ${prefix}"
+        if [ "$gpt" == "gpt" ];then
+            name="${name}_gpt"
+            output_dir="${output_dir}_gpt"
+            lora="${lora}_gpt"
+        fi
+    fi
+    extra_args="${extra_args} --t_model ${t_model} --name ${lora} --temperature 3.0 --kd True --s_num_pos_examples ${s_pos}"
+    if [ "$prompt" == "fullprompt" ];then
+        name="${name}_${prompt}"
+        output_dir="${output_dir}_${prompt}"
+        extra_args="${extra_args} --prompt True"
+    fi
+    name="${name}_${whitening}"
+    output_dir="${output_dir}_${whitening}"
+    if [ "$whitening" == "whitening" ];then
+        extra_args="${extra_args} --whitening True"
+    fi
+    if [ "$s_pos" == "10" ];then
+        s_pos=${pos}
+    fi
+    if [ "$s_pos" != "$pos" ];then
+        name="${name}_s_pos${s_pos}"
+        output_dir="${output_dir}_s_pos${s_pos}"
+    fi
+    extra_args="${extra_args} --s_num_pos_examples ${s_pos}"
+    if [ "$custom" == "custom" ];then
+        name="${name}_custom"
+        output_dir="${output_dir}_custom"
+        extra_args="${extra_args} --custom_model True"
+    fi
+    if [ "$hyper" == "hyper" ];then
+        name="${name}_hyper"
+        output_dir="${output_dir}_hyper"
+        extra_args="${extra_args} --hyperencoder True"
+    fi
+    if [ "$stand" == "stand" ];then
+        name="${name}_stand"
+        output_dir="${output_dir}_stand"
+        extra_args="${extra_args} --logit_stand True"
+    fi
+    if [ "$loramse" == "loramse" ];then
+        name="${name}_loramse"
+        output_dir="${output_dir}_loramse"
+        extra_args="${extra_args} --loramse True"
+    fi
+    if [ "$data_type" != "0" ];then
+        # sed 's/[ ][ ]*/_/g' <<< $data_type
+        name="${name}_$data_type"
+        output_dir="${output_dir}_$data_type"
+        max_num_instances=10000
+        if [ "$data_type" == "QAa" ];then
+            data_type="QA,QG,SA,TLD,PE,Misc.,TC"
+            max_num_instances=1200 
+        fi
+        if [ "$data_type" == "QAx" ];then
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,GC,TtC,TS,Mathematics,CtT"
+            max_num_instances=800 #700
+        fi
+        if [ "$data_type" == "QAxx" ];then
+            data_type="QA,QG,SA,TLD,PE,Misc.,NER,TC,CC,CCl,TM,IE,WCG,TCo,QU,Summarization,DG,WS,SCo,SI,PT,LP,FiTB,TQE,SD,GC,TtC,TS,StC,Explanation,Mathematics,CtT,II"
+            max_num_instances=800 #700
+        fi
+        extra_args="${extra_args} --data_type $data_type"
+        
+    fi
+    
+fi
+
 if [ "$do_sample" == "sample" ];then
     name="${name}_sample"
     output_dir="${output_dir}_sample"

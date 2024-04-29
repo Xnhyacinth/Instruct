@@ -70,6 +70,11 @@ class P3(datasets.GeneratorBasedBuilder):
                 {
                     "id": datasets.Value("string"),
                     "Task": datasets.Value("string"),
+                    "Examples": [{
+                        "id": datasets.Value("string"),
+                        "input": [datasets.Value("int32")],
+                        "output": [datasets.Value("int32")],
+                    }],
                     "Instance": {
                         "id": datasets.Value("string"),
                         "input_tokenized": [datasets.Value("int32")],
@@ -152,10 +157,13 @@ class P3(datasets.GeneratorBasedBuilder):
                     # we put them in the first for reproducibility.
                     # so, we use them here
                     instances = all_instances
+                    task_data['Examples'] = []
                 else:
                     instances = all_instances
                 if max_num_instances_per_task is not None and max_num_instances_per_task >= 0:
                     random.shuffle(instances)
+                    if subset == "train":
+                        task_data['Examples'] = instances[-16:]
                     instances = instances[:max_num_instances_per_task]
 
                 for idx, instance in enumerate(instances):

@@ -128,9 +128,47 @@ class P3KDTrainer(Seq2SeqTrainer):
 
     def trim_batch(self, batch, pad_token_id):
         batch[0], batch[1] = trim_batch(batch[0], pad_token_id, batch[1])
-        if len(batch) == 4:
+        if len(batch) > 2:
             batch[2], batch[3] = trim_batch(batch[2], pad_token_id, batch[3])
+            if len(batch) > 5:
+                batch[4], batch[5] = trim_batch(
+                    batch[4], pad_token_id, batch[5])
         return batch
+
+    # ideally precompute_support_hidden_states + run_model_eval should be similar to run_model
+    def precompute_support_hidden_states(self, bsz, batch):
+        support_input_ids = batch[0]
+        support_attention_mask = batch[1]
+
+        # max_length = max([m.sum() for m in support_attention_mask]).item()
+        demo_length = support_input_ids.size(0) // bsz
+        support_hidden_states, support_attention_masks = [], []
+
+        for i in range(bsz):
+            with torch.no_grad():
+                attention_mask = support_attention_mask[i * demo_length:(i+1)*demo_length]
+                hidden_states = self.t_model.encoder(
+                    input_ids=support_input_ids[i * demo_length:(i+1)*demo_length],
+                    attention_mask=attention_mask
+                ).last_hidden_state
+                # support_hidden_states: k * src_len * hidden_dim
+                hidden_states = hidden_states.flatten(0, 1)
+                # support_hidden_states: (k * src_len) * hidden_dim
+                attention_mask = attention_mask.flatten(0, 1)
+                # support_attention_mask: (k * src_len)
+
+                # remove padding positions
+                hidden_states = hidden_states[attention_mask.bool(), :]
+                # support_hidden_states: (new_length) * hidden_dim
+                attention_mask = torch.ones(
+                    1, attention_mask.sum(),
+                    dtype=torch.long, device=support_attention_mask.device
+                )
+
+                support_hidden_states.append(hidden_states)
+                support_attention_masks.append(attention_mask)
+
+        return support_hidden_states, support_attention_masks
 
     # kd loss
     def cal_loss(self, s_logits, t_logits, temperature):
@@ -247,10 +285,53 @@ class P3KDTrainer(Seq2SeqTrainer):
         ]
         return sum(loss_a) / len(loss_a)
 
+    def normalize(self, logit):
+        mean = logit.mean(dim=-1, keepdims=True)
+        stdv = logit.std(dim=-1, keepdims=True)
+        return (logit - mean) / (1e-7 + stdv)
+
+    def kd_loss(self, logits_student_in, logits_teacher_in, temperature, logit_stand):
+        logits_student = self.normalize(
+            logits_student_in) if logit_stand else logits_student_in
+        logits_teacher = self.normalize(
+            logits_teacher_in) if logit_stand else logits_student_in
+        log_pred_student = F.log_softmax(logits_student / temperature, dim=-1)
+        pred_teacher = F.softmax(logits_teacher / temperature, dim=-1)
+        loss_kd = F.kl_div(log_pred_student, pred_teacher,
+                           reduction="none").sum(-1).mean()
+        loss_kd *= temperature**2
+        return loss_kd
+
     def compute_loss(self, model, inputs, return_outputs=False):
-        # forward pass
         self.t_model.eval()
         model.train()
+
+        batch = self.trim_batch(inputs, self.tokenizer.pad_token_id)
+        # k * src_len
+        support_input_ids, support_attention_mask = batch[0], batch[1]
+        # m * src_len
+        query_input_ids, query_attention_mask = batch[2], batch[3]
+        # m * tar_len
+        target_input_ids, target_attention_mask = batch[4], batch[5]
+        features = batch[6]
+        target_input_ids[target_input_ids == self.tokenizer.pad_token_id] = -100
+        
+        # forward pass
+        bsz = query_input_ids.size(0)
+        support_hidden_states, support_attention_mask = self.precompute_support_hidden_states(
+            bsz, [support_input_ids, support_attention_mask])
+
+        query_hidden_states = self.t_model.encoder(input_ids=query_input_ids, attention_mask=query_attention_mask).last_hidden_state
+        # concat w.r.t sequence length
+        max_len = max([m.sum() for m in support_attention_mask]).item() + query_input_ids.size(1)
+
+        all_hidden_states = torch.ones((bsz, max_len, query_hidden_states.size(-1)), dtype=torch.bfloat16, device=query_input_ids.device) * 0
+        all_attention_mask = torch.ones((bsz, max_len), dtype=torch.long, device=query_input_ids.device) * 0
+        for i in range(bsz):
+            l = support_attention_mask[i].sum().item() + query_input_ids.size(1)
+            all_hidden_states[i, :l] = torch.cat((support_hidden_states[i], query_hidden_states[i]))
+            all_attention_mask[i, :l] = torch.cat((support_attention_mask[i].squeeze(0), query_attention_mask[i]))
+        
         output_hidden_states = False
         output_attentions = False
         if self.config.use_hd:
@@ -259,15 +340,28 @@ class P3KDTrainer(Seq2SeqTrainer):
             output_attentions = True
         with torch.no_grad():
             t_outputs = self.t_model(
-                **inputs[0], return_dict=True, output_attentions=output_attentions, output_hidden_states=output_hidden_states)
+                attention_mask=all_attention_mask,
+                encoder_outputs=[all_hidden_states],
+                labels=target_input_ids,
+                decoder_attention_mask=target_attention_mask,
+                return_dict=True, 
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states)
         # t_loss = t_outputs.get("loss")
         t_logits = t_outputs.get("logits")
 
-        # prefix_encodings = self.get_features(inputs[1])
-        # inputs[2]["features"] = torch.Tensor(prefix_encodings).to(model.device)
-        input = inputs[1]
-        outputs = model(**input, return_dict=True, output_attentions=output_attentions,
-                        output_hidden_states=output_hidden_states)
+        outputs = model(
+            input_ids=query_input_ids,
+            attention_mask=query_attention_mask,
+            labels=target_input_ids,
+            decoder_attention_mask=target_attention_mask,
+            features=features,
+            use_cache=False,
+            return_dict=True, 
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states
+        )
+
         loss = outputs.get("loss")
         logits = outputs.get("logits")
         if self.config.use_ce:
@@ -277,7 +371,9 @@ class P3KDTrainer(Seq2SeqTrainer):
                 + (1 - self.config.alpha_kd) * loss
             )
         if self.config.use_kl:
-            loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
+        #     loss = self.cal_kl(logits, t_logits) * 0.1 + loss * 0.8
+        # if self.config.logit_stand:
+            loss += self.kd_loss(logits, t_logits, self.config.temperature, self.config.logit_stand) * 5
         if self.config.use_hd:
             loss += self.cal_hd(outputs.get("encoder_hidden_states"),
                                 t_outputs.get("encoder_hidden_states"))
@@ -309,8 +405,8 @@ class P3KDTrainer(Seq2SeqTrainer):
         Works both with or without labels.
         """
         args = self.args
-        self._max_length = 128
-        self._num_beams = 1
+        self._max_length = 64
+        self._num_beams = 4
         prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
 
         # if eval is called w/o train init deepspeed here
@@ -370,6 +466,8 @@ class P3KDTrainer(Seq2SeqTrainer):
 
         observed_num_examples = 0
         # Main evaluation loop
+        loss_list, metadata = [], []
+        start_idx = 0
         for step, inputs in enumerate(dataloader):
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
@@ -380,9 +478,18 @@ class P3KDTrainer(Seq2SeqTrainer):
                     batch_size = observed_batch_size
 
             # Prediction step
-            input = inputs[1]
             loss, logits, labels = self.prediction_step(
-                model, input, prediction_loss_only, ignore_keys=ignore_keys)
+                model, inputs[2:7], prediction_loss_only, ignore_keys=ignore_keys)
+
+            loss_list += loss.float().cpu().detach().numpy().tolist()
+
+            for dp in inputs[7]:
+                n_options = len(dp)
+                metadata.append({
+                    "indices": list(range(start_idx, start_idx + n_options)),
+                    "options": dp,
+                })
+                start_idx += n_options
 
             if is_torch_tpu_available():
                 xm.mark_step()
@@ -467,7 +574,7 @@ class P3KDTrainer(Seq2SeqTrainer):
         # Metrics!
         if self.compute_metrics is not None and all_preds is not None and all_labels is not None:
             metrics = self.compute_metrics(
-                dataset=eval_dataset, preds=all_preds, save_prefix=metric_key_prefix)
+                dataset=eval_dataset, metadata=metadata, preds=np.array(loss_list), save_prefix=metric_key_prefix)
         else:
             metrics = {}
 
@@ -513,6 +620,17 @@ class P3KDTrainer(Seq2SeqTrainer):
             Tuple[Optional[float], Optional[torch.Tensor], Optional[torch.Tensor]]: A tuple with the loss, logits and
             labels (each being optional).
         """
+        batch = self.trim_batch(inputs, self.tokenizer.pad_token_id)
+        input_ids, attention_mask = batch[0], batch[1]
+        decoder_input_ids, decoder_attention_mask = batch[2], batch[3]
+        features = batch[4]
+        inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": decoder_input_ids,
+            "decoder_attention_mask": decoder_attention_mask,
+            "features": features
+        }
 
         if not self.args.predict_with_generate or prediction_loss_only:
             return super().prediction_step(
@@ -521,64 +639,31 @@ class P3KDTrainer(Seq2SeqTrainer):
 
         has_labels = "labels" in inputs
         inputs = self._prepare_inputs(inputs)
-
         # XXX: adapt synced_gpus for fairscale as well
         gen_kwargs = {
             "max_length": self._max_length if self._max_length is not None else self.model.config.max_length,
             "synced_gpus": True if is_deepspeed_zero3_enabled() else False,
         }
 
-        if self.config.do_sample:
-            gen_kwargs.update(
-                {
-                    "num_beams": self._num_beams if self._num_beams is not None else self.model.config.num_beams,
-                    "top_k": 50,
-                    "top_p": 0.95,
-                    "do_sample": True,
-                }
-            )
-
-        if "attention_mask" in inputs:
-            gen_kwargs["attention_mask"] = inputs.get("attention_mask", None)
-        if "instruction_input" in inputs:
-            gen_kwargs["instruction_input"] = inputs.get(
-                "instruction_input", None)
-        if "instruction_attention_mask" in inputs:
-            gen_kwargs["instruction_attention_mask"] = inputs.get(
-                "instruction_attention_mask", None)
-        if "features" in inputs:
-            gen_kwargs["features"] = inputs.get("features", None)
         # prepare generation inputs
         # some encoder-decoder models can have varying encder's and thus
         # varying model input names
 
-        if hasattr(self.model, "encoder") and self.model.encoder.main_input_name != self.model.main_input_name:
-            generation_inputs = inputs[self.model.encoder.main_input_name]
-        else:
-            generation_inputs = inputs[self.model.main_input_name]
-        self.model.gen = True
-
-        generated_tokens = self.model.generate(
-            **{'input_ids': generation_inputs},
-            **gen_kwargs,
-        )
-        # in case the batch is shorter than max length, the output should be padded
-        if generated_tokens.shape[-1] < gen_kwargs["max_length"]:
-            generated_tokens = self._pad_tensors_to_max_len(
-                generated_tokens, gen_kwargs["max_length"])
-
         with torch.no_grad():
-            if has_labels:
-                with self.autocast_smart_context_manager():
-                    outputs = model(**inputs)
-                if self.label_smoother is not None:
-                    loss = self.label_smoother(
-                        outputs, inputs["labels"]).mean().detach()
-                else:
-                    loss = (outputs["loss"] if isinstance(
-                        outputs, dict) else outputs[0]).mean().detach()
-            else:
-                loss = None
+            output = self.model(
+                **inputs,
+                use_cache=False
+            )
+
+        # rank_classification
+        lprobs = F.log_softmax(output.logits, dim=-1)
+        loss, _ = label_smoothed_nll_loss(
+            lprobs, inputs.get('labels', None),
+            epsilon=0.0,
+            # epsilon=0.1 if is_training else 0.0,
+            ignore_index=self.tokenizer.pad_token_id,
+            average='instance',  # by default it's per-instance token-avg loss
+        )
 
         if self.args.prediction_loss_only:
             return (loss, None, None)
@@ -591,14 +676,14 @@ class P3KDTrainer(Seq2SeqTrainer):
         else:
             labels = None
 
-        return (loss, generated_tokens, labels)
+        return (loss, lprobs, labels)
 
 
 class P3Trainer(Seq2SeqTrainer):
 
     def trim_batch(self, batch, pad_token_id):
         batch[0], batch[1] = trim_batch(batch[0], pad_token_id, batch[1])
-        if len(batch) == 4:
+        if len(batch) == 5:
             batch[2], batch[3] = trim_batch(batch[2], pad_token_id, batch[3])
         return batch
 
@@ -734,7 +819,7 @@ class P3Trainer(Seq2SeqTrainer):
                     "options": dp,
                 })
                 start_idx += n_options
-            
+
             if is_torch_tpu_available():
                 xm.mark_step()
 
