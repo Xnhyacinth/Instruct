@@ -525,8 +525,8 @@ class P3KDTrainer(Seq2SeqTrainer):
             #         logits = self.preprocess_logits_for_metrics(logits, labels)
             #     preds_host = logits if preds_host is None else nested_concat(
             #         preds_host, logits, padding_index=-100)
-            # self.control = self.callback_handler.on_prediction_step(
-            #     args, self.state, self.control
+            self.control = self.callback_handler.on_prediction_step(
+                args, self.state, self.control)
 
             # print(len(self._nested_gather(loss.float().cpu().detach().numpy().tolist())))
             # print(len(self._nested_gather(metadata)))
@@ -879,8 +879,8 @@ class P3Trainer(Seq2SeqTrainer):
             #         logits = self.preprocess_logits_for_metrics(logits, labels)
             #     preds_host = logits if preds_host is None else nested_concat(
             #         preds_host, logits, padding_index=-100)
-            # self.control = self.callback_handler.on_prediction_step(
-            #     args, self.state, self.control
+            self.control = self.callback_handler.on_prediction_step(
+                args, self.state, self.control)
 
             # print(len(self._nested_gather(loss.float().cpu().detach().numpy().tolist())))
             # print(len(self._nested_gather(metadata)))

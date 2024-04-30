@@ -6,7 +6,7 @@
 ### 
 set -e
 export NCCL_P2P_DISABLE=1
-
+export HF_HOME=./cache/huggingface
 # export CUDA_DEVICE_ORDER="PCI_BUS_ID"
 # export TRANSFORMERS_CACHE=/home/yizhongw/.cache/huggingface
 # export HF_HOME=/mnt/publiccache/huggingface/
@@ -189,6 +189,30 @@ if [ "$tune" == "lora_p3" ];then
         extra_args="${extra_args} --data_type $data_type"
         run_file=run_s2s_lora.py
         max_num_instances=10000 # 10000 2000, 3000
+        if [ "$data_type" == "imdb" ];then
+            gradient_accumulation_steps=2
+        fi
+        if [ "$data_type" == "wiki_hop_original" ];then
+            gradient_accumulation_steps=2
+        fi
+        if [ "$data_type" == "ropes" ];then
+            gradient_accumulation_steps=2
+        fi
+        if [ "$data_type" == "quoref" ];then
+            gradient_accumulation_steps=2
+        fi
+        if [ "$data_type" == "duorc_ParaphraseRC" ];then
+            gradient_accumulation_steps=2
+        fi
+        if [ "$data_type" == "duorc_SelfRC" ];then
+            gradient_accumulation_steps=2
+        fi
+        if [ "$data_type" == "cnn_dailymail_3.0.0" ];then
+            gradient_accumulation_steps=2
+        fi
+        if [ "$data_type" == "xsum" ];then
+            gradient_accumulation_steps=2
+        fi
     fi
 fi
 

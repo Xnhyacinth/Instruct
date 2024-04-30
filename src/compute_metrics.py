@@ -13,7 +13,7 @@ from transformers import AutoTokenizer
 logger = logging.getLogger(__name__)
 
 class GPTTokenizer:
-    gpt_tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2", max_length=1e5, local_files_only=True)
+    gpt_tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2", max_length=1e5)
 
     def tokenize(self, s):
         tokens = self.gpt_tokenizer.tokenize(s)

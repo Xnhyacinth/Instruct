@@ -19,6 +19,8 @@ model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_do
 model_name = 'allenai/tk-instruct-3b-def'
 tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
 model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
+
+gpt_tokenizer = transformers.AutoTokenizer.from_pretrained("openai-community/gpt2", max_length=1e5)
 # tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
 # sequence = "who are you?"
 # print("Original sequence: ",sequence)

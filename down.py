@@ -82,6 +82,9 @@ def move_file_to_parent_folder(directory, filename):
             l += 1
         else:
             print(folder)
+            src_file = os.path.join(directory, folder)
+            shutil.rmtree(src_file)
+            
     print(l)
 
 
@@ -121,7 +124,7 @@ def rm_file_to_parent_folder(directory, filename):
 
 
 # 指定目录和要移动的文件名
-directory = "output_meta"
+directory = "output_meta_p3"
 filename = "param_tensors.json"
 # filename = "check"
 # 调用函数移动文件
