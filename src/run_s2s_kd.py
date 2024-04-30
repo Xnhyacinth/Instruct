@@ -853,7 +853,7 @@ def main():
                 data_map = data_dict['data_map']
             lora_dict = {}
             output_lora_path = 'output_meta'
-            if data_args.num_pos_examples == 0:
+            if data_args.s_num_pos_examples == 0:
                 output_lora_path = 'output_meta_pos0'
             for file in os.listdir(output_lora_path):
                 try:
