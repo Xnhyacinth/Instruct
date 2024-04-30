@@ -14,11 +14,11 @@ config = datasets.DownloadConfig(resume_download=True, max_retries=100)
 # model_name = 'qinyuany/my-t0-base'
 model_name = 'google/t5-xl-lm-adapt'
 tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
-model = transformers.AutoModelForCausalLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
+model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
 
 model_name = 'allenai/tk-instruct-3b-def'
 tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
-model = transformers.AutoModelForCausalLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
+model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
 # tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
 # sequence = "who are you?"
 # print("Original sequence: ",sequence)
