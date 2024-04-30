@@ -141,7 +141,7 @@ class P3(datasets.GeneratorBasedBuilder):
         # with open(path, encoding="utf-8") as split_f:
         #     for line in split_f:
         #         task_name = line.strip()
-        for task_name in tasks[:2]:
+        for task_name in tasks:
             task_path = os.path.join(task_dir, task_name + ".json")
             with open(task_path, encoding="utf-8") as task_f:
                 s = task_f.read()
@@ -164,6 +164,7 @@ class P3(datasets.GeneratorBasedBuilder):
                     random.shuffle(instances)
                     if subset == "train":
                         task_data['Examples'] = instances[-16:]
+                        instances = instances[:-16]
                     instances = instances[:max_num_instances_per_task]
 
                 for idx, instance in enumerate(instances):
@@ -182,5 +183,6 @@ class P3(datasets.GeneratorBasedBuilder):
                         example["Instance"].pop('task')
                     if 'options' not in example['Instance']:
                         example['Instance']['options'] = []
+                    # print(example["Instance"].keys())
 
                     yield f"{task_name}_{idx}", example

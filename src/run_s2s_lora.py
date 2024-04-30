@@ -17,7 +17,7 @@
 Fine-tuning the library models for sequence to sequence.
 """
 # You can also adapt this script on your own sequence to sequence task. Pointers for this are left as comments.
-
+from collections import defaultdict
 import logging
 import os
 from pathlib import Path
@@ -54,6 +54,10 @@ from transformers.trainer_utils import get_last_checkpoint
 from ni_collator import DataCollatorForNI
 from ni_trainer import NITrainer, DenserEvalCallback
 from compute_metrics import compute_metrics, compute_grouped_metrics
+from utils import expand_dataset_to_prompts, load_dataset_names, map_prompt_name_to_task_name
+from p3_trainer import P3Trainer, P3KDTrainer
+from p3_collator import DataCollatorForP3
+import pandas as pd
 
 set_progress_bar_enabled(False)
 logger = logging.getLogger(__name__)
@@ -379,15 +383,34 @@ def main():
     set_seed(training_args.seed)
 
     # Get the NaturalInstructions dataset
-    raw_datasets = load_dataset(
-        "src/ni_dataset.py",
-        data_dir=data_args.data_dir,
-        task_dir=data_args.task_dir,
-        cache_dir=model_args.cache_dir,
-        max_num_instances_per_task=data_args.max_num_instances_per_task,
-        max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task,
-        data_type=data_args.data_type
-    )
+    if "p3" in data_args.data_dir:
+        # get prompt data
+        dataset_names = load_dataset_names("t0", "train")
+        if data_args.data_type is not None:
+            dataset_names = [data_args.data_type]
+            logger.info(dataset_names)
+        prompt_identifiers = expand_dataset_to_prompts(dataset_names)
+
+        raw_datasets = load_dataset(
+            "src/p3_dataset.py",
+            dataset_list=prompt_identifiers,
+            data_dir=data_args.data_dir,
+            task_dir=data_args.task_dir,
+            cache_dir=model_args.cache_dir,
+            max_num_instances_per_task=data_args.max_num_instances_per_task,
+            max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task,
+            # data_type=data_args.data_type
+        )
+    else:
+        raw_datasets = load_dataset(
+            "src/ni_dataset.py",
+            data_dir=data_args.data_dir,
+            task_dir=data_args.task_dir,
+            cache_dir=model_args.cache_dir,
+            max_num_instances_per_task=data_args.max_num_instances_per_task,
+            max_num_instances_per_eval_task=data_args.max_num_instances_per_eval_task,
+            data_type=data_args.data_type
+        )
 
     # Load pretrained model and tokenizer
     #
@@ -508,22 +531,41 @@ def main():
     # Data collator
     label_pad_token_id = - \
         100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
-    data_collator = DataCollatorForNI(
-        tokenizer,
-        model=model,
-        padding="max_length" if data_args.pad_to_max_length else "longest",
-        max_source_length=data_args.max_source_length,
-        max_target_length=data_args.max_target_length,
-        label_pad_token_id=label_pad_token_id,
-        pad_to_multiple_of=8 if training_args.fp16 else None,
-        add_task_name=data_args.add_task_name,
-        add_task_definition=data_args.add_task_definition,
-        num_pos_examples=data_args.num_pos_examples,
-        num_neg_examples=data_args.num_neg_examples,
-        add_explanation=data_args.add_explanation,
-        tk_instruct=data_args.tk_instruct,
-        args=model_args
-    )
+    if "p3" in data_args.data_dir:
+        datasets_list = load_dataset_names('t0', "eval_datasets")
+        data_collator = DataCollatorForP3(
+            tokenizer,
+            model=model,
+            padding="max_length" if data_args.pad_to_max_length else "longest",
+            max_source_length=data_args.max_source_length,
+            max_target_length=data_args.max_target_length,
+            label_pad_token_id=label_pad_token_id,
+            pad_to_multiple_of=8 if training_args.fp16 else None,
+            add_task_name=data_args.add_task_name,
+            add_task_definition=data_args.add_task_definition,
+            num_pos_examples=data_args.num_pos_examples,
+            num_neg_examples=data_args.num_neg_examples,
+            add_explanation=data_args.add_explanation,
+            tk_instruct=data_args.tk_instruct,
+            args=model_args,
+        )
+    else:
+        data_collator = DataCollatorForNI(
+            tokenizer,
+            model=model,
+            padding="max_length" if data_args.pad_to_max_length else "longest",
+            max_source_length=data_args.max_source_length,
+            max_target_length=data_args.max_target_length,
+            label_pad_token_id=label_pad_token_id,
+            pad_to_multiple_of=8 if training_args.fp16 else None,
+            add_task_name=data_args.add_task_name,
+            add_task_definition=data_args.add_task_definition,
+            num_pos_examples=data_args.num_pos_examples,
+            num_neg_examples=data_args.num_neg_examples,
+            add_explanation=data_args.add_explanation,
+            tk_instruct=data_args.tk_instruct,
+            args=model_args
+        )
     # we don't want to remove unused columns because we will prepare each batch during training,
     # and some of the information will aslo be used in evaluation.
     training_args.remove_unused_columns = False
@@ -558,18 +600,148 @@ def main():
                     }) + "\n")
         return result
 
+    def evaluate(data, all_predictions, datasets):
+        assert len(data) == len(all_predictions)
+
+        performance_dict = {}
+        for dataset in datasets:
+            datapoints, predictions = [], []
+            for dp, prediction in zip(data, all_predictions):
+                if dp["Task"] in dataset:  # a temparary hack for boolq vs. boolq-all
+                    datapoints.append(dp)
+                    predictions.append(prediction)
+            metric, perf = evaluate_a_dataset(dataset, predictions, datapoints)
+            performance_dict[dataset] = (metric, perf)
+
+        if len(datasets) > 1:  # multitask
+            return performance_dict
+        else:  # singletask
+            return metric, perf
+
+    def evaluate_a_dataset(dataset_name, predictions, datapoints):
+        is_classification = False
+
+        accs = []
+        precisions = defaultdict(list)
+        recalls = defaultdict(list)
+        for prediction, datapoint in zip(predictions, datapoints):
+            prediction = prediction.strip()
+            groundtruth = datapoint['Instance']["output"].strip()
+            is_correct = prediction == groundtruth
+            accs.append(is_correct)
+            if is_classification:
+                recalls[groundtruth].append(is_correct)
+                precisions[prediction].append(is_correct)
+
+        if not is_classification:
+            return "acc", np.mean(accs)
+
+        f1s = []
+        for key in recalls:
+            precision = np.mean(precisions[key]) if key in precisions else 1.0
+            recall = np.mean(recalls[key])
+            if precision+recall == 0:
+                f1s.append(0)
+            else:
+                f1s.append(2*precision*recall / (precision+recall))
+
+        return "f1", np.mean(f1s)
+
+    def compute_p3_metrics(dataset, metadata, preds, save_prefix=None):
+        predictions = []
+        for idx, dp in enumerate(metadata):
+            curr_instance_losses = [preds[indices]
+                                    for indices in dp["indices"]]
+            prediction_idx = sorted(
+                enumerate(curr_instance_losses), key=lambda x: x[1])[0][0]
+            prediction = dp["options"][prediction_idx]
+            predictions.append(prediction.strip())
+
+        references = list(set([e['Task'] for e in dataset]))
+
+        perf = evaluate(dataset, predictions, references)
+
+        if save_prefix is not None:
+            df = pd.DataFrame(
+                columns=["task_name", "prompt_name", "performance", "eval_mode"])
+            results_file = os.path.join(training_args.output_dir,
+                                        f"{save_prefix}_eval_results.csv")
+            for prompt, (metric, test_perf) in perf.items():
+                task_name = map_prompt_name_to_task_name(prompt, datasets_list)
+                df.loc[len(df.index)] = [task_name, prompt,
+                                         test_perf, "rank_classification"]
+
+                # save after each dataset is evaluated
+                df.to_csv(results_file)
+            # aggreate results and get mean/median
+            agg_results_file = os.path.join(
+                training_args.output_dir, "results_agg_{}.csv".format(save_prefix))
+
+            df = df[['task_name', 'performance']]
+            mean = df.groupby("task_name").mean()
+            median = df.groupby("task_name").median()
+            mean = mean.rename(columns={"performance": "mean"})
+            mean["median"] = median["performance"]
+            mean.to_csv(agg_results_file)
+
+            average_df = pd.DataFrame({'task_name': ['avg_score'],
+                                       'mean': [mean['mean'].mean()],
+                                       'median': [mean['median'].median()]})
+            average_df = average_df.set_index('task_name')
+
+            mean = pd.concat([mean, average_df], ignore_index=False, axis=0)
+            mean.to_csv(agg_results_file)
+
+        references = [[e["Instance"]["output"]] for e in dataset]
+        result = compute_metrics(
+            predictions=predictions, references=references)
+        result_per_task = compute_grouped_metrics(
+            predictions=predictions, references=references, groups=dataset["Task"])
+        result.update(result_per_task)
+        categories = [map_prompt_name_to_task_name(
+            it, datasets_list) for it in dataset["Task"]]
+        result_per_category = compute_grouped_metrics(
+            predictions=predictions, references=references, groups=categories)
+        result.update(result_per_category)
+        prediction_lens = [np.count_nonzero(
+            pred != tokenizer.pad_token_id) for pred in preds]
+        result["gen_len"] = np.mean(prediction_lens)
+        result = {k: round(v, 4) for k, v in result.items()}
+        if save_prefix is not None:
+            with open(os.path.join(training_args.output_dir, f"{save_prefix}_eval_predictions.jsonl"), "w") as fout:
+                for example, pred in zip(dataset, predictions):
+                    fout.write(json.dumps({
+                        "Task": example["Task"],
+                        "Instance": example["Instance"],
+                        "Prediction": pred
+                    }) + "\n")
+
+        return result
+    
     # Initialize our Trainer
-    trainer = NITrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset if training_args.do_train else None,
-        eval_dataset=eval_dataset if training_args.do_eval else None,
-        tokenizer=tokenizer,
-        data_collator=data_collator,
-        compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
-        callbacks=[
-            DenserEvalCallback] if training_args.denser_evaluation else None
-    )
+    if 'p3' in data_args.data_dir:
+        trainer = P3Trainer(
+                model=model,
+                args=training_args,
+                train_dataset=train_dataset if training_args.do_train else None,
+                eval_dataset=eval_dataset if training_args.do_eval else None,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                compute_metrics=compute_p3_metrics if training_args.predict_with_generate else None,
+                callbacks=[DenserEvalCallback] if training_args.denser_evaluation else None
+            )
+    else:
+        trainer = NITrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset if training_args.do_train else None,
+            eval_dataset=eval_dataset if training_args.do_eval else None,
+            tokenizer=tokenizer,
+            data_collator=data_collator,
+            compute_metrics=compute_ni_metrics if training_args.predict_with_generate else None,
+            callbacks=[
+                DenserEvalCallback] if training_args.denser_evaluation else None
+        )
 
     all_metrics = {"run_name": training_args.run_name}
 

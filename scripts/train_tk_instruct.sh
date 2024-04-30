@@ -69,7 +69,7 @@ if [ "$dataset" == "p3" ];then
     name=experiment_p3_pos${pos}_pooler-${m}_lr${lr}_warm${warmup_ratio}
     output_dir=output_p3_pos${pos}_pooler/${m}_lr${lr}_warm${warmup_ratio}
     run_file=run_s2s_kd_ac.py
-    max_num_instances=500
+    max_num_instances=1000
 fi
 
 if [ "$tune" != "full" ];then
@@ -148,6 +148,47 @@ if [ "$tune" == "lora" ];then
         if [ "$data_type" == "SA" ];then
             max_num_instances=3000
         fi
+    fi
+fi
+if [ "$tune" == "lora_p3" ];then
+    if [ "$allenai" == "allenai" ];then
+        if [ "$m" == "t5-base" ];then
+            model=allenai/tk-instruct-base-def-pos
+            if [ "$pos" == "0" ];then
+                model=output_pos0/t5-base_lr1e-4_warm0.05
+            fi
+        fi
+        if [ "$m" == "t5-xl" ];then
+            model=allenai/tk-instruct-3b-def-pos
+            if [ "$pos" == "0" ];then
+                model=allenai/tk-instruct-3b-def 
+            fi
+            gradient_accumulation_steps=8
+        fi
+        if [ "$m" == "t5-xxl" ];then
+            model=allenai/tk-instruct-11b-def-pos
+            if [ "$pos" == "0" ];then
+                model=allenai/tk-instruct-11b-def 
+            fi
+            gradient_accumulation_steps=2
+            max_num_instances=300
+            if [ "$warmup_ratio" == "0.02" ];then
+                gradient_accumulation_steps=2
+                max_num_instances=200
+            fi
+        fi
+        name="${name}_allenai"
+        output_dir="${output_dir}_allenai"
+    fi
+    if [ "$data_type" != "0" ];then
+        # sed 's/[ ][ ]*/_/g' <<< $data_type
+        name="${name}_$data_type"
+        output="output_meta_p3/$data_type/${output_dir}"
+        output_dir=${output}
+        gradient_accumulation_steps=1
+        extra_args="${extra_args} --data_type $data_type"
+        run_file=run_s2s_lora.py
+        max_num_instances=10000 # 10000 2000, 3000
     fi
 fi
 

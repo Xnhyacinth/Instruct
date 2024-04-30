@@ -483,11 +483,13 @@ def main():
     if "p3" in data_args.data_dir:
         # get prompt data
         dataset_names = load_dataset_names("t0", "train")
+        if data_args.data_type is not None:
+            dataset_names = [data_args.data_type]
         prompt_identifiers = expand_dataset_to_prompts(dataset_names)
 
         raw_datasets = load_dataset(
             "src/p3_dataset.py",
-            dataset_list=prompt_identifiers[:2],
+            dataset_list=prompt_identifiers,
             data_dir=data_args.data_dir,
             task_dir=data_args.task_dir,
             cache_dir=model_args.cache_dir,
@@ -1037,7 +1039,7 @@ def main():
             predictions.append(prediction.strip())
 
         references = list(set([e['Task'] for e in dataset]))
-        
+
         perf = evaluate(dataset, predictions, references)
 
         if save_prefix is not None:

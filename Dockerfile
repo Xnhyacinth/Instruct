@@ -65,7 +65,7 @@ RUN cd /usr/local \
 
 RUN source /opt/rh/devtoolset-7/enable &&  source ~/.bashrc  \
     && conda deactivate && conda activate env-3.7.7 \
-    && pip install torch==1.13.1+cu113 torchvision==0.14.1+cu117 torchaudio==0.13.1+cu117 \
+    && pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1+cu117 \
     -f https://download.pytorch.org/whl/torch_stable.html \
     && pip install sentencepiece && pip install nltk && pip  install pybind11 && pip install boto3
 
