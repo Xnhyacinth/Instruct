@@ -206,7 +206,8 @@ if [ "$tune" == "kd" ];then
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-3b-def 
             fi
-            gradient_accumulation_steps=8
+            max_num_instances=400
+            gradient_accumulation_steps=4
         fi
         if [ "$m" == "t5-xxl" ];then
             t_model=allenai/tk-instruct-11b-def-pos
@@ -341,7 +342,8 @@ if [ "$tune" == "kd_p3" ];then
             if [ "$pos" == "0" ];then
                 t_model=allenai/tk-instruct-3b-def 
             fi
-            gradient_accumulation_steps=8
+            gradient_accumulation_steps=4
+            max_num_instances=500
         fi
         name="${name}_fid"
         output_dir="${output_dir}_fid"
