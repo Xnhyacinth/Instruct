@@ -6,7 +6,7 @@
 ### 
 
 # nohup bash scripts/train_tk_instruct.sh 2 0,1 t5-xl 2 1e-4 0 lora 15000 0.01 32 allenai ce fullprompt ffn nowhitening 0 0 nocustom nohyper noko 0 nogpt QA > logs0/t5-base-1e-4_lora_warm0.05_pos2_QA.log 2>&1 &
-sleep 15400
+sleep 15900
 
 nohup bash scripts/train_tk_instruct.sh 2 0,1 t5-xl 2 1e-4 0 lora 15000 0.01 32 allenai ce fullprompt ffn nowhitening 0 0 nocustom nohyper noko 0 nogpt PE > logs0/t5-base-1e-4_lora_warm0.05_pos2_PE.log 2>&1 &
 sleep 17400
