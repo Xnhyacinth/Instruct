@@ -529,4 +529,6 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --bf16 \
     --save_total_limit 1 \
     --seed 42 \
+    --run_name ${name} \
+    --report_to none \
     ${extra_args}
