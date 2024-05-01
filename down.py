@@ -52,14 +52,22 @@ config = datasets.DownloadConfig(resume_download=True, max_retries=100)
 #     data_dict = json.load(f)
 #     data_map = data_dict['data_map']
 # print(','.join(list(data_map.keys())))
-
-
+import json
+with open(f'src/t0.json', "r") as f:
+    config = json.load(f)
+    ds = config['train']
 def move_file_to_parent_folder(directory, filename):
     # directory = "output_meta"
     # 获取指定目录下的所有文件夹
     folders = [f for f in os.listdir(
         directory) if os.path.isdir(os.path.join(directory, f))]
     print(len(folders))
+    print(len(ds))
+    for d in ds:
+        if d not in folders:
+            # os.makedirs(f'{directory}/{d}')
+            print(d)
+    print("#" * 10)
     l = 0
     # 移动文件到上一级目录
     for folder in folders:
@@ -83,7 +91,7 @@ def move_file_to_parent_folder(directory, filename):
         else:
             print(folder)
             src_file = os.path.join(directory, folder)
-            shutil.rmtree(src_file)
+            # shutil.rmtree(src_file)
             
     print(l)
 

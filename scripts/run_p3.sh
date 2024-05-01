@@ -20,25 +20,16 @@
 # sleep 20
 # # 60000
 # nohup bash scripts/train_tk_instruct.sh 1 3 t5-base 16 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt adversarial_qa_dbert nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_adversarial_qa_dbert.log 2>&1 &
-# adversarial_qa_droberta
-# quoref
-# yelp_review_full
-# wiki_hop_original
-# cnn_dailymail_3.0.0
-# imdb
-# ropes
-# dream
-# duorc_SelfRC
-# duorc_ParaphraseRC
-# adversarial_qa_dbidaf
-# wiki_bio
-# nohup bash scripts/train_tk_instruct.sh 1 6 t5-base 8 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt adversarial_qa_dbidaf nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_adversarial_qa_dbidaf.log 2>&1 &
-# sleep 20
+
+
+sleep 12000
+nohup bash scripts/train_tk_instruct.sh 1 0 t5-base 8 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt adversarial_qa_dbidaf nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_adversarial_qa_dbidaf.log 2>&1 &
+sleep 20
 # # 60000
 # nohup bash scripts/train_tk_instruct.sh 1 7 t5-base 8 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt adversarial_qa_droberta nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_adversarial_qa_droberta.log 2>&1 &
 
 # # 30000
-# nohup bash scripts/train_tk_instruct.sh 1 0 t5-base 8 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt dream nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_dream.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 1 6 t5-base 8 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt dream nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_dream.log 2>&1 &
 # sleep 20
 # # 60000
 # nohup bash scripts/train_tk_instruct.sh 1 1 t5-base 16 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt qasc nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_qasc.log 2>&1 &
@@ -57,7 +48,7 @@
 # nohup bash scripts/train_tk_instruct.sh 1 1 t5-base 16 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt common_gen nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_common_gen.log 2>&1 &
 # sleep 20
 # # 50000
-# nohup bash scripts/train_tk_instruct.sh 1 2 t5-base 8 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt wiki_bio nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_wiki_bio.log 2>&1 &
+nohup bash scripts/train_tk_instruct.sh 1 2 t5-base 8 1e-4 0 lora_p3 10000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt wiki_bio nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_wiki_bio.log 2>&1 &
 
 
 
@@ -78,30 +69,30 @@
 # sleep 11600
 # # 120000
 
-sleep 10000
+# sleep 10000
 # # 90000
-nohup bash scripts/train_tk_instruct.sh 1 0 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt cnn_dailymail_3.0.0 nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_cnn_dailymail_3.0.0.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 1 0 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt cnn_dailymail_3.0.0 nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_cnn_dailymail_3.0.0.log 2>&1 &
+# # sleep 20
+# # nohup bash scripts/train_tk_instruct.sh 1 1 t5-base 16 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt paws nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_paws.log 2>&1 &
 # sleep 20
-# nohup bash scripts/train_tk_instruct.sh 1 1 t5-base 16 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt paws nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_paws.log 2>&1 &
-sleep 20
-nohup bash scripts/train_tk_instruct.sh 1 2 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt wiki_hop_original nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_wiki_hop_original.log 2>&1 &
-sleep 20
+# nohup bash scripts/train_tk_instruct.sh 1 2 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt wiki_hop_original nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_wiki_hop_original.log 2>&1 &
+# sleep 20
 # 110000
-nohup bash scripts/train_tk_instruct.sh 1 3 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt multi_news nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_multi_news.log 2>&1 &
-sleep 20
-nohup bash scripts/train_tk_instruct.sh 1 6 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt imdb nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_imdb.log 2>&1 &
-sleep 20
-# 90000
-nohup bash scripts/train_tk_instruct.sh 1 7 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt duorc_SelfRC nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_duorc_SelfRC.log 2>&1 &
-sleep 20
-# # # 90000
-nohup bash scripts/train_tk_instruct.sh 1 1 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt duorc_ParaphraseRC nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_duorc_ParaphraseRC.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 1 3 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt multi_news nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_multi_news.log 2>&1 &
 # sleep 20
-# # # 120000
+# nohup bash scripts/train_tk_instruct.sh 1 6 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt imdb nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_imdb.log 2>&1 &
+# sleep 20
+# # 90000
+# nohup bash scripts/train_tk_instruct.sh 1 7 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt duorc_SelfRC nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_duorc_SelfRC.log 2>&1 &
+# sleep 20
+# # # # 90000
+# nohup bash scripts/train_tk_instruct.sh 1 1 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt duorc_ParaphraseRC nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_duorc_ParaphraseRC.log 2>&1 &
+# sleep 20
+# # # # 120000
 # nohup bash scripts/train_tk_instruct.sh 1 2 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt ropes nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_ropes.log 2>&1 &
 # sleep 20
-# # # 110000
-# nohup bash scripts/train_tk_instruct.sh 1 3 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt quoref nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_quoref.log 2>&1 &
+# # # # 110000
+# nohup bash scripts/train_tk_instruct.sh 1 7 t5-base 8 1e-4 0 lora_p3 15000 0.01 32 noallenai ce fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt quoref nolora 0 p3 > logs_p3/t5-base-1e-4_lora_warm0.05_pos2_quoref.log 2>&1 &
 
 # sleep 12100
 # # 110000

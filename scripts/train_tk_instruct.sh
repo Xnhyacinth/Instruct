@@ -6,7 +6,7 @@
 ### 
 set -e
 export NCCL_P2P_DISABLE=1
-export HF_HOME=./cache/huggingface
+# export HF_HOME=./cache/huggingface
 # export CUDA_DEVICE_ORDER="PCI_BUS_ID"
 # export TRANSFORMERS_CACHE=/home/yizhongw/.cache/huggingface
 # export HF_HOME=/mnt/publiccache/huggingface/
@@ -213,6 +213,9 @@ if [ "$tune" == "lora_p3" ];then
         if [ "$data_type" == "xsum" ];then
             gradient_accumulation_steps=2
         fi
+        # if [ "$data_type" == "duorc_ParaphraseRC" ];then
+        #     gradient_accumulation_steps=2
+        # fi
     fi
 fi
 
@@ -524,7 +527,6 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --save_steps 2500 \
     --deepspeed ds_configs/stage2.config \
     --bf16 \
-    --run_name ${name} \
     --save_total_limit 1 \
     --seed 42 \
     ${extra_args}
