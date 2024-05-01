@@ -62,12 +62,13 @@ def move_file_to_parent_folder(directory, filename):
     folders = [f for f in os.listdir(
         directory) if os.path.isdir(os.path.join(directory, f))]
     print(len(folders))
-    print(len(ds))
-    for d in ds:
-        if d not in folders:
-            # os.makedirs(f'{directory}/{d}')
-            print(d)
-    print("#" * 10)
+    if directory == "output_meta_p3":
+        print(len(ds))
+        for d in ds:
+            if d not in folders:
+                # os.makedirs(f'{directory}/{d}')
+                print(d)
+        print("#" * 10)
     l = 0
     # 移动文件到上一级目录
     for folder in folders:
@@ -132,7 +133,7 @@ def rm_file_to_parent_folder(directory, filename):
 
 
 # 指定目录和要移动的文件名
-directory = "output_meta_p3"
+directory = "output_meta_pos0"
 filename = "param_tensors.json"
 # filename = "check"
 # 调用函数移动文件
