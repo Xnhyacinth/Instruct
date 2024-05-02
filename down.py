@@ -133,7 +133,7 @@ def rm_file_to_parent_folder(directory, filename):
 
 
 # 指定目录和要移动的文件名
-directory = "output_meta_pos0"
+directory = "output_meta_p3"
 filename = "param_tensors.json"
 # filename = "check"
 # 调用函数移动文件

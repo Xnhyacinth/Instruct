@@ -93,6 +93,7 @@ if [ "$tune" == "full" ];then
         fi
         extra_args="${extra_args} --data_type $data_type"
     fi
+    extra_args="${extra_args} --do_predict"
 fi
 model=google/${m}-lm-adapt
 if [ "$tune" == "lora" ];then
@@ -151,6 +152,15 @@ if [ "$tune" == "lora" ];then
     fi
 fi
 if [ "$tune" == "lora_p3" ];then
+    if [ "$m" == "t0-base" ];then
+        model=qinyuany/my-t0-base
+    fi
+    if [ "$m" == "t0-large" ];then
+        model=qinyuany/my-t0-large
+    fi
+    if [ "$m" == "t0-xl" ];then
+        model=qinyuany/my-t0-xl
+    fi
     if [ "$allenai" == "allenai" ];then
         if [ "$m" == "t5-base" ];then
             model=allenai/tk-instruct-base-def-pos
@@ -183,7 +193,7 @@ if [ "$tune" == "lora_p3" ];then
     if [ "$data_type" != "0" ];then
         # sed 's/[ ][ ]*/_/g' <<< $data_type
         name="${name}_$data_type"
-        output="output_meta_p3/$data_type/${output_dir}"
+        output="output_meta_p3_${m}/$data_type/${output_dir}"
         output_dir=${output}
         gradient_accumulation_steps=1
         extra_args="${extra_args} --data_type $data_type"
@@ -220,6 +230,7 @@ if [ "$tune" == "lora_p3" ];then
 fi
 
 if [ "$tune" == "kd" ];then
+    extra_args="${extra_args} --do_predict"
     t_model=output/${model}_lr5e-5
     if [ "$allenai" == "allenai" ];then
         if [ "$m" == "t5-base" ];then
@@ -360,17 +371,26 @@ if [ "$tune" == "kd_p3" ];then
     if [ "$allenai" == "fid" ];then
         if [ "$m" == "t5-base" ];then
             t_model=qinyuany/fid-icl-t5-lm-base
-            if [ "$pos" == "0" ];then
-                t_model=output_pos0/t5-base_lr1e-4_warm0.05
-            fi
+        fi
+        if [ "$m" == "t5-large" ];then
+            t_model=qinyuany/fid-icl-t5-lm-large
         fi
         if [ "$m" == "t5-xl" ];then
             t_model=qinyuany/fid-icl-t5-lm-xl
-            if [ "$pos" == "0" ];then
-                t_model=allenai/tk-instruct-3b-def 
-            fi
             gradient_accumulation_steps=4
             max_num_instances=500
+        fi
+        if [ "$m" == "t0-base" ];then
+            model=qinyuany/my-t0-base
+            t_model=qinyuany/fid-icl-t0-base
+        fi
+        if [ "$m" == "t0-large" ];then
+            model=qinyuany/my-t0-large
+            t_model=qinyuany/fid-icl-t0-large
+        fi
+        if [ "$m" == "t0-xl" ];then
+            model=qinyuany/my-t0-xl
+            t_model=qinyuany/fid-icl-t0-xl
         fi
         name="${name}_fid"
         output_dir="${output_dir}_fid"
@@ -476,7 +496,7 @@ if [ "$tune" == "kd_p3" ];then
         extra_args="${extra_args} --data_type $data_type"
         
     fi
-    
+    extra_args="${extra_args} --do_predict"
 fi
 
 if [ "$do_sample" == "sample" ];then
@@ -491,9 +511,9 @@ fi
 echo name: ${name}
 echo run_file: ${run_file}
 echo output_dir: ${output_dir}
+#     --do_predict \
 deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --do_train \
-    --do_predict \
     --predict_with_generate \
     --model_name_or_path ${model} \
     --max_source_length 1024 \
@@ -530,6 +550,5 @@ deepspeed --master_port $port -i localhost:${gpus} src/${run_file} \
     --save_total_limit 1 \
     --seed 42 \
     --run_name ${name} \
-    --report_to none \
     ${extra_args}
-# 
+#    --report_to none \

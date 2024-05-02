@@ -11,16 +11,26 @@ config = datasets.DownloadConfig(resume_download=True, max_retries=100)
 # data = load_dataset("Xnhyacinth/Image", 'WQ', download_config=config)
 # print(data)
 # data.save_to_disk('dataset/Image/WQ')
-# model_name = 'qinyuany/my-t0-base'
-model_name = 'google/t5-xl-lm-adapt'
+model_name = 'qinyuany/fid-icl-t0-base'
+# model_name = 'google/t5-xl-lm-adapt'
 tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
 model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
 
-model_name = 'allenai/tk-instruct-3b-def'
-tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
-model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
+# model_name = 'qinyuany/fid-icl-t5-lm-large'
+# # model_name = 'google/t5-xl-lm-adapt'
+# tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
+# model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
 
-gpt_tokenizer = transformers.AutoTokenizer.from_pretrained("openai-community/gpt2", max_length=1e5)
+
+# model_name = 'qinyuany/fid-icl-t0-large'
+# # model_name = 'google/t5-xl-lm-adapt'
+# tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
+# model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
+# model_name = 'allenai/tk-instruct-3b-def'
+# tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
+# model = transformers.AutoModelForSeq2SeqLM.from_pretrained(model_name, resume_download=True, local_files_only=False)
+
+# gpt_tokenizer = transformers.AutoTokenizer.from_pretrained("openai-community/gpt2", max_length=1e5)
 # tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, local_files_only=False)
 # sequence = "who are you?"
 # print("Original sequence: ",sequence)
