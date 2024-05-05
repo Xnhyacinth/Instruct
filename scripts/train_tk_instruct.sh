@@ -66,8 +66,8 @@ fi
 if [ "$dataset" == "p3" ];then
     data_dir=data_p3_eval
     task_dir=data_p3
-    name=experiment_p3_pos${pos}_pooler-${m}_lr${lr}_warm${warmup_ratio}
-    output_dir=output_p3_pos${pos}_pooler/${m}_lr${lr}_warm${warmup_ratio}
+    name=experiment_p3_pooler-${m}_lr${lr}_warm${warmup_ratio}
+    output_dir=output_p3_pooler/${m}_lr${lr}_warm${warmup_ratio}
     run_file=run_s2s_kd_ac.py
     max_num_instances=1000
 fi
@@ -161,35 +161,6 @@ if [ "$tune" == "lora_p3" ];then
     if [ "$m" == "t0-xl" ];then
         model=qinyuany/my-t0-xl
     fi
-    if [ "$allenai" == "allenai" ];then
-        if [ "$m" == "t5-base" ];then
-            model=allenai/tk-instruct-base-def-pos
-            if [ "$pos" == "0" ];then
-                model=output_pos0/t5-base_lr1e-4_warm0.05
-            fi
-        fi
-        if [ "$m" == "t5-xl" ];then
-            model=allenai/tk-instruct-3b-def-pos
-            if [ "$pos" == "0" ];then
-                model=allenai/tk-instruct-3b-def 
-            fi
-            gradient_accumulation_steps=8
-        fi
-        if [ "$m" == "t5-xxl" ];then
-            model=allenai/tk-instruct-11b-def-pos
-            if [ "$pos" == "0" ];then
-                model=allenai/tk-instruct-11b-def 
-            fi
-            gradient_accumulation_steps=2
-            max_num_instances=300
-            if [ "$warmup_ratio" == "0.02" ];then
-                gradient_accumulation_steps=2
-                max_num_instances=200
-            fi
-        fi
-        name="${name}_allenai"
-        output_dir="${output_dir}_allenai"
-    fi
     if [ "$data_type" != "0" ];then
         # sed 's/[ ][ ]*/_/g' <<< $data_type
         name="${name}_$data_type"
@@ -199,30 +170,22 @@ if [ "$tune" == "lora_p3" ];then
         extra_args="${extra_args} --data_type $data_type"
         run_file=run_s2s_lora.py
         max_num_instances=10000 # 10000 2000, 3000
-        if [ "$data_type" == "imdb" ];then
+        if [ "$bs" == "8" ];then
             gradient_accumulation_steps=2
         fi
-        if [ "$data_type" == "wiki_hop_original" ];then
-            gradient_accumulation_steps=2
+        if [ "$bs" == "4" ];then
+            gradient_accumulation_steps=4
         fi
-        if [ "$data_type" == "ropes" ];then
+        if [ "$m" == "t5-xl" ];then
             gradient_accumulation_steps=2
+            max_num_instances=7000
         fi
-        if [ "$data_type" == "quoref" ];then
-            gradient_accumulation_steps=2
-        fi
-        if [ "$data_type" == "duorc_ParaphraseRC" ];then
-            gradient_accumulation_steps=2
-        fi
-        if [ "$data_type" == "duorc_SelfRC" ];then
-            gradient_accumulation_steps=2
-        fi
-        if [ "$data_type" == "cnn_dailymail_3.0.0" ];then
-            gradient_accumulation_steps=2
-        fi
-        if [ "$data_type" == "xsum" ];then
-            gradient_accumulation_steps=2
-        fi
+        # if [ "$m" == "t5-large" ];then
+        #     gradient_accumulation_steps=4
+        # fi
+        # if [ "$m" == "t0-large" ];then
+        #     gradient_accumulation_steps=4
+        # fi
         # if [ "$data_type" == "duorc_ParaphraseRC" ];then
         #     gradient_accumulation_steps=2
         # fi
@@ -374,6 +337,7 @@ if [ "$tune" == "kd_p3" ];then
         fi
         if [ "$m" == "t5-large" ];then
             t_model=qinyuany/fid-icl-t5-lm-large
+            gradient_accumulation_steps=4
         fi
         if [ "$m" == "t5-xl" ];then
             t_model=qinyuany/fid-icl-t5-lm-xl

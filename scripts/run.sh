@@ -63,7 +63,9 @@
 
 # 145
 # nohup bash scripts/train_tk_instruct.sh 2 4,5 t5-base 4 1e-4 0 kd_p3 30000 0.03 32 fid ce_kl fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 0 nolora 0 p3 > logs/p3_t5-base-1e-4_kd_warm0.05_r32_no_fullprompt_nowhitening_ffn_ce_kl_pos2.log 2>&1 &
-nohup bash scripts/train_tk_instruct.sh 2 6,7 t0-base 4 1e-4 0 kd_p3 30000 0.03 32 fid ce_kl fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 0 nolora 0 p3 > logs/p3_t0-base-1e-4_kd_warm0.05_r32_no_fullprompt_nowhitening_ffn_ce_kl_pos2.log 2>&1 &
+# nohup bash scripts/train_tk_instruct.sh 2 6,7 t0-base 4 1e-4 0 kd_p3 30000 0.03 32 fid ce_kl fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 0 nolora 0 p3 > logs/p3_t0-base-1e-4_kd_warm0.05_r32_no_fullprompt_nowhitening_ffn_ce_kl_pos2.log 2>&1 &
+nohup bash scripts/train_tk_instruct.sh 2 4,5 t5-base 4 1e-4 0 kd_p3 30000 0.03 32 fid ce_kl fullprompt ffn nowhitening 2 2 nocustom nohyper noko 0 nogpt 0 loramse nostand p3 > logs/p3_t5-base-1e-4_kd_warm0.05_r32_no_fullprompt_nowhitening_ffn_ce_kl_loramse.log 2>&1 &
+
 
 # sleep 20
 # nohup bash scripts/train_tk_instruct.sh 2 4,5 t5-base 8 5e-5 0 kd 2 0.02 32 allenai ce fullprompt ffn nowhitening 2 2 nocustom 0 > logs/t5-base-5e-5_kd_warm0.05_r32_no_fullprompt_nowhitening_ffn_ce_pos2.log 2>&1 &

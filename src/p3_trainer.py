@@ -305,6 +305,69 @@ class P3KDTrainer(Seq2SeqTrainer):
         loss_kd *= temperature**2
         return loss_kd
 
+    def cal_loramse(self, model, lora_A, lora_B):
+        param_tensor_A, param_tensor_B = [], []
+        model = model.module if hasattr(model, "module") else model
+        for i, l in enumerate(model.encoder.block): # qkvo
+            l = l.module if hasattr(l, "module") else l
+            if 'ko' in model.config.name:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.k.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.o.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.k.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.o.lora_B.unsqueeze(1))
+            else:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+        for i, l in enumerate(model.decoder.block): # qkvo
+            l = l.module if hasattr(l, "module") else l
+            if 'ko' in model.config.name:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.k.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.o.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.k.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.o.lora_B.unsqueeze(1))
+                
+                # EncDecAttention
+                param_tensor_A.append(l.layer[1].EncDecAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.k.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.v.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.o.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[1].EncDecAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.k.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.v.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.o.lora_B.unsqueeze(1))
+            else:
+                param_tensor_A.append(l.layer[0].SelfAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[0].SelfAttention.v.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[0].SelfAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[0].SelfAttention.v.lora_B.unsqueeze(1))
+                
+                # EncDecAttention
+                param_tensor_A.append(l.layer[1].EncDecAttention.q.lora_A.unsqueeze(1))
+                param_tensor_A.append(l.layer[1].EncDecAttention.v.lora_A.unsqueeze(1))
+                
+                param_tensor_B.append(l.layer[1].EncDecAttention.q.lora_B.unsqueeze(1))
+                param_tensor_B.append(l.layer[1].EncDecAttention.v.lora_B.unsqueeze(1))
+        
+        param_tensor_A = torch.cat(param_tensor_A, dim=1)
+        param_tensor_B = torch.cat(param_tensor_B, dim=1)
+        
+        return (F.mse_loss(param_tensor_A, lora_B) + F.mse_loss(param_tensor_B, lora_A)) * 1000
+    
     def compute_loss(self, model, inputs, return_outputs=False):
         self.t_model.eval()
         model.train()
@@ -317,6 +380,7 @@ class P3KDTrainer(Seq2SeqTrainer):
         # m * tar_len
         target_input_ids, target_attention_mask = batch[4], batch[5]
         features = batch[6]
+    
         target_input_ids[target_input_ids ==
                          self.tokenizer.pad_token_id] = -100
 
@@ -331,17 +395,12 @@ class P3KDTrainer(Seq2SeqTrainer):
         max_len = max([m.sum() for m in support_attention_mask]
                       ).item() + query_input_ids.size(1)
 
-        all_hidden_states = torch.ones((bsz, max_len, query_hidden_states.size(
-            -1)), dtype=torch.bfloat16, device=query_input_ids.device) * 0
-        all_attention_mask = torch.ones(
-            (bsz, max_len), dtype=torch.long, device=query_input_ids.device) * 0
+        all_hidden_states = torch.ones((bsz, max_len, query_hidden_states.size(-1)), dtype=torch.bfloat16, device=query_input_ids.device) * 0
+        all_attention_mask = torch.ones((bsz, max_len), dtype=torch.long, device=query_input_ids.device) * 0
         for i in range(bsz):
-            l = support_attention_mask[i].sum(
-            ).item() + query_input_ids.size(1)
-            all_hidden_states[i, :l] = torch.cat(
-                (support_hidden_states[i], query_hidden_states[i]))
-            all_attention_mask[i, :l] = torch.cat(
-                (support_attention_mask[i].squeeze(0), query_attention_mask[i]))
+            l = support_attention_mask[i].sum().item() + query_input_ids.size(1)
+            all_hidden_states[i, :l] = torch.cat((support_hidden_states[i], query_hidden_states[i]))
+            all_attention_mask[i, :l] = torch.cat((support_attention_mask[i].squeeze(0), query_attention_mask[i]))
 
         output_hidden_states = False
         output_attentions = False
@@ -397,6 +456,10 @@ class P3KDTrainer(Seq2SeqTrainer):
             loss += self.cal_attn(outputs.get("decoder_attentions"),
                                   t_outputs.get("decoder_attentions")) * 10
             loss = loss.to(torch.bfloat16)
+        if self.config.loramse:
+            lora_A, lora_B = batch[7].to(torch.bfloat16), batch[8].to(torch.bfloat16)
+            loss_lora = self.cal_loramse(model, lora_A, lora_B)
+            loss += torch.sigmoid(loss_lora) * loss_lora
         # compute custom loss (suppose one has 3 labels with different weights)
         # loss_fct = nn.CrossEntropyLoss()
         # loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
@@ -491,7 +554,7 @@ class P3KDTrainer(Seq2SeqTrainer):
 
             # Prediction step
             loss, logits, labels = self.prediction_step(
-                model, inputs[2:], prediction_loss_only, ignore_keys=ignore_keys)
+                model, inputs[2:7], prediction_loss_only, ignore_keys=ignore_keys)
 
             # loss_list += loss.float().cpu().detach().numpy().tolist()
 

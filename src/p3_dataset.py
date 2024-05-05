@@ -22,6 +22,7 @@ import os
 import random
 import datasets
 from t0_config import DATA_SPLITS_SIZES, FID_METADATA, eval
+from utils import load_dataset_names
 
 logger = datasets.logging.get_logger(__name__)
 
@@ -43,7 +44,7 @@ through an iterative peer review process to ensure their quality.
 
 _URL = "https://instructions.apps.allenai.org/"
 
-
+dataset_names = load_dataset_names("t0", "train")
 class P3Config(datasets.BuilderConfig):
     def __init__(self, *args, dataset_list=None, task_dir=None, max_num_instances_per_task=None, max_num_instances_per_eval_task=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -70,6 +71,7 @@ class P3(datasets.GeneratorBasedBuilder):
                 {
                     "id": datasets.Value("string"),
                     "Task": datasets.Value("string"),
+                    "Categories": datasets.Value("string"),
                     "Examples": [{
                         "id": datasets.Value("string"),
                         "input": [datasets.Value("int32")],
@@ -147,7 +149,7 @@ class P3(datasets.GeneratorBasedBuilder):
                 s = task_f.read()
                 task_data = json.loads(s)
                 task_data["Task"] = task_name
-
+                
                 if "Instruction Source" in task_data:
                     task_data.pop("Instruction Source")
 
@@ -158,8 +160,12 @@ class P3(datasets.GeneratorBasedBuilder):
                     # so, we use them here
                     instances = all_instances
                     task_data['Examples'] = []
+                    task_data['Categories'] = ''
                 else:
                     instances = all_instances
+                    for dataset_name in dataset_names:
+                        if task_name.startswith(dataset_name):
+                            task_data["Categories"] = dataset_name
                 if max_num_instances_per_task is not None and max_num_instances_per_task >= 0:
                     random.shuffle(instances)
                     if subset == "train":

@@ -3,6 +3,8 @@ Copyright (c) 2024 by Huanxuan Liao, huanxuanliao@gmail.com, All Rights Reserved
 Author: Xnhyacinth, Xnhyacinth@qq.com
 Date: 2024-02-27 18:34:50
 '''
+import argparse
+import json
 import shutil
 import os
 from torch import tensor
@@ -52,10 +54,27 @@ config = datasets.DownloadConfig(resume_download=True, max_retries=100)
 #     data_dict = json.load(f)
 #     data_map = data_dict['data_map']
 # print(','.join(list(data_map.keys())))
-import json
+
+
+def parse_arge():
+    """Parse the arguments."""
+    parser = argparse.ArgumentParser()
+    # add model id and dataset path argument
+    parser.add_argument("--directory", type=str, default="output_meta",
+                        help="Path to the already processed dataset.")
+    parser.add_argument("--pos", type=str, default=None,
+                        help="Path to the already processed dataset.")
+    args = parser.parse_known_args()
+    return args
+
+
+opt, _ = parse_arge()
+directory = opt.directory
 with open(f'src/t0.json', "r") as f:
     config = json.load(f)
     ds = config['train']
+
+
 def move_file_to_parent_folder(directory, filename):
     # directory = "output_meta"
     # 获取指定目录下的所有文件夹
@@ -93,7 +112,7 @@ def move_file_to_parent_folder(directory, filename):
             print(folder)
             src_file = os.path.join(directory, folder)
             # shutil.rmtree(src_file)
-            
+
     print(l)
 
 
@@ -109,37 +128,54 @@ def rm_file_to_parent_folder(directory, filename):
     for folder in folders:
         try:
             for xx in os.listdir(f'{directory}/{folder}'):
-                for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
-                    for xxxx in os.listdir(f'{directory}/{folder}/{xx}/{xxx}'):
-                        if filename1 in xxxx:
-                            src_file = os.path.join(
-                                directory, folder, xx, xxx, xxxx)
-                            print(f"Removed {src_file}")
-                            os.remove(src_file)
-                            # os.removedirs(src_file)
-                        if filename2 in xxxx:
-                            src_file = os.path.join(
-                                directory, folder, xx, xxx, xxxx)
-                            print(f"Removed {src_file}")
-                            os.remove(src_file)
-                        if filename0 in xxxx:
-                            src_file = os.path.join(
-                                directory, folder, xx, xxx, xxxx)
-                            # os.removedirs(src_file)
-                            shutil.rmtree(src_file)
-                            print(f"Removed {src_file}")
+                if opt.pos is None:
+                    for xxx in os.listdir(f'{directory}/{folder}/{xx}'):
+                        for xxxx in os.listdir(f'{directory}/{folder}/{xx}/{xxx}'):
+                            if filename1 in xxxx:
+                                src_file = os.path.join(
+                                    directory, folder, xx, xxx, xxxx)
+                                print(f"Removed {src_file}")
+                                os.remove(src_file)
+                                # os.removedirs(src_file)
+                            if filename2 in xxxx:
+                                src_file = os.path.join(
+                                    directory, folder, xx, xxx, xxxx)
+                                print(f"Removed {src_file}")
+                                os.remove(src_file)
+                            if filename0 in xxxx:
+                                src_file = os.path.join(
+                                    directory, folder, xx, xxx, xxxx)
+                                # os.removedirs(src_file)
+                                shutil.rmtree(src_file)
+                                print(f"Removed {src_file}")
+                else:
+                    if filename1 in xx:
+                        src_file = os.path.join(directory, folder, xx)
+                        print(f"Removed {src_file}")
+                        os.remove(src_file)
+                        # os.removedirs(src_file)
+                    if filename2 in xx:
+                        src_file = os.path.join(directory, folder, xx)
+                        print(f"Removed {src_file}")
+                        os.remove(src_file)
+                    if filename0 in xx:
+                        src_file = os.path.join(directory, folder, xx)
+                        # os.removedirs(src_file)
+                        shutil.rmtree(src_file)
+                        print(f"Removed {src_file}")
         except:
             pass
 
 
 # 指定目录和要移动的文件名
-directory = "output_meta_p3"
 filename = "param_tensors.json"
 # filename = "check"
 # 调用函数移动文件
-move_file_to_parent_folder(directory, filename)
+if opt.pos is None:
+    move_file_to_parent_folder(directory, filename)
 rm_file_to_parent_folder(directory, filename)
-
+# python down.py  --directory output_meta_p3/
+# python down.py  --directory output_pos2_pooler_new/ --pos 1
 
 # import os
 # import json

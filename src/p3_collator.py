@@ -32,6 +32,7 @@ class DataCollatorForP3:
     attention_masks: dict = None
     args: dict = None
     student_input: bool = False
+    lora_dict: dict = None
 
     def __call__(self, batch, return_tensors=None):
 
@@ -61,6 +62,7 @@ class DataCollatorForP3:
             sources, targets, options = [], [], []
             if self.kd:
                 batch_concat_ids, batch_concat_attention_mask = [], []
+                lora_A_params, lora_B_params = [], []
             for instance in batch:
                 # task_input = ""
                 # # add the input first.
@@ -128,6 +130,15 @@ class DataCollatorForP3:
                         batch_concat_ids.append(concat_ids)
                         batch_concat_attention_mask.append(
                             concat_attention_mask)
+                    
+                    if self.args.loramse and instance['Categories'] in self.lora_dict.keys():
+                        if 'ko' in self.args.name:
+                            lora_A_params.append(self.lora_dict[instance['Categories']]['param_tensor_A'])
+                            lora_B_params.append(self.lora_dict[instance['Categories']]['param_tensor_B'])
+                        else:
+                            lora_A_params.append(self.lora_dict[instance['Categories']]['param_tensor_qv_A'])
+                            lora_B_params.append(self.lora_dict[instance['Categories']]['param_tensor_qv_B'])
+
                     if self.args.custom_model:
                         # instance
                         pass
@@ -138,13 +149,13 @@ class DataCollatorForP3:
         input_ids = pad_tokens(sources, max_len=self.max_source_length)
         attention_mask = input_ids.ne(self.tokenizer.pad_token_id).long()
         decoder_input_ids = pad_tokens(targets, max_len=self.max_target_length)
-        decoder_attention_mask = decoder_input_ids.ne(
-            self.tokenizer.pad_token_id).long()
+        decoder_attention_mask = decoder_input_ids.ne(self.tokenizer.pad_token_id).long()
 
         if self.kd:
             if instance['Task'] not in eval:
                 concat_ids = torch.cat(batch_concat_ids, dim=0)
-                concat_attention_mask = torch.cat(batch_concat_attention_mask, dim=0)
+                concat_attention_mask = torch.cat(
+                    batch_concat_attention_mask, dim=0)
             else:
                 concat_ids, concat_attention_mask = None, None
             prefixs_inputs = {
@@ -175,6 +186,15 @@ class DataCollatorForP3:
             features = pooled_sentence.mean(dim=1).cpu()
             features = torch.Tensor(features)
 
-            return concat_ids, concat_attention_mask, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, features
+            if self.args.loramse and len(lora_A_params) > 0:
+                if len(lora_A_params) == input_ids.size(0):
+                    lora_A_params = torch.Tensor(lora_A_params)
+                    lora_B_params = torch.Tensor(lora_B_params)
+                else:
+                    for instance in batch:
+                        if instance['Categories'] not in self.lora_dict.keys():
+                            print(instance['Categories'])
+            
+            return concat_ids, concat_attention_mask, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, features, lora_A_params, lora_B_params
         else:
             return input_ids, attention_mask, decoder_input_ids, decoder_attention_mask

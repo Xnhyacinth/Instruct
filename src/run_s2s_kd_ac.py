@@ -603,7 +603,7 @@ def main():
         t_model = model
     # if "t5-xxl" not in model_args.model_name_or_path:
     #     model.resize_token_embeddings(len(tokenizer))
-
+    t_model.eval()
     if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
         assert (
             data_args.lang is not None
@@ -879,8 +879,28 @@ def main():
 
     # Data collator
     model_args.s_num_pos_examples = data_args.s_num_pos_examples
+    data_map, lora_dict = None, None
     if "p3" in data_args.data_dir:
         datasets_list = load_dataset_names('t0', "eval_datasets")
+        if model_args.loramse:
+            lora_dict = {}
+            output_lora_path = 'output_meta_p3'
+            if 't0-base' in model_args.model_name_or_path:
+                output_lora_path = 'output_meta_p3_t0-base'
+            logger.info(f'output_lora_path: {output_lora_path}')
+            for file in os.listdir(output_lora_path):
+                try:
+                    with open(f'{output_lora_path}/{file}/param_tensors.json', 'r') as f:
+                        lora_d = json.load(f)
+                        if 'ko' not in model_args.name:
+                            lora_d.pop('param_tensor_A')
+                            lora_d.pop('param_tensor_B')
+                        else:
+                            lora_d.pop('param_tensor_qv_A')
+                            lora_d.pop('param_tensor_qv_B')
+                        lora_dict[file] = lora_d
+                except:
+                    pass
         data_collator = DataCollatorForP3(
             tokenizer,
             model=t_model,
@@ -901,9 +921,9 @@ def main():
             attention_masks=attention_masks if model_args.whitening else None,
             args=model_args,
             student_input=data_args.s_num_pos_examples != data_args.num_pos_examples if training_args.do_train else False,
+            lora_dict=lora_dict
         )
     else:
-        data_map, lora_dict = None, None
         if model_args.loramse:
             with open('src/data_dict.json', 'r') as f:
                 data_dict = json.load(f)

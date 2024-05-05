@@ -263,20 +263,22 @@ class DataCollatorForNI:
                         features = prefixs_inputs
                     else:
                         prefixs_inputs = prefixs_inputs.to(self.model.device)
-                        hidden_states = self.model.encoder(
-                            **prefixs_inputs, return_dict=True, output_hidden_states=True).hidden_states
+                        self.model.eval()
+                        with torch.no_grad():
+                            hidden_states = self.model.encoder(
+                                **prefixs_inputs, return_dict=True, output_hidden_states=True).hidden_states
 
-                        if self.args.pooling == 'first_last_avg':
-                            pooled_sentence = (
-                                hidden_states[-1] + hidden_states[1])
-                        elif self.args.pooling == 'last_avg':
-                            pooled_sentence = (hidden_states[-1])
-                        elif self.args.pooling == 'last2avg':
-                            pooled_sentence = (
-                                hidden_states[-1] + hidden_states[-2])
-                        else:
-                            raise Exception(
-                                "unknown pooling {}".format(self.args.pooling))
+                            if self.args.pooling == 'first_last_avg':
+                                pooled_sentence = (
+                                    hidden_states[-1] + hidden_states[1])
+                            elif self.args.pooling == 'last_avg':
+                                pooled_sentence = (hidden_states[-1])
+                            elif self.args.pooling == 'last2avg':
+                                pooled_sentence = (
+                                    hidden_states[-1] + hidden_states[-2])
+                            else:
+                                raise Exception(
+                                    "unknown pooling {}".format(self.args.pooling))
 
                         if self.args.custom_model or self.args.prefix_length > 0:
                             instruction_inputs = hidden_states[-1].cpu()
